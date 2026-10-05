@@ -48,7 +48,7 @@ EMBEDDING_MODEL=
 
 详细架构见 [`docs/architecture.md`](docs/architecture.md)。
 
-## 项目名称（待定）
+## 项目名称 Notebuddy
 课程知识树 + 桌面答疑伙伴（工作代号）
 
 ---
