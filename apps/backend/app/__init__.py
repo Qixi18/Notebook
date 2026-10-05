@@ -1,0 +1,1 @@
+"""NoteBuddy backend application package."""

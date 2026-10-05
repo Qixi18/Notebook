@@ -1,5 +1,35 @@
 # 项目概念文档
 
+## 当前开发状态
+
+仓库已经加入初版本地 Web Demo 骨架：
+
+- `apps/web`：React + TypeScript + Vite 三栏学习工作区
+- `apps/backend`：FastAPI + SQLite 课程、资料、解析任务和本地检索 API
+- 当前可完成：创建课程、上传 PPTX、逐页解析、查看页面文本、基于已解析页面进行本地检索问答
+- 当前上传格式限制为 PPTX；PDF、DOCX 解析器已预留目录，尚未接入
+- 当前尚未接入：Embedding、外部大模型、知识树自动合并、可编辑笔记版本和 Electron 桌面包装
+
+### 本地启动
+
+```powershell
+cd apps/backend
+uv sync
+uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+另开一个终端：
+
+```powershell
+cd apps/web
+npm install
+npm run dev
+```
+
+浏览器打开 `http://127.0.0.1:5173`。本地课件和数据库写入根目录下的 `data/`，该目录不会提交到 Git。
+
+详细架构见 [`docs/architecture.md`](docs/architecture.md)。
+
 ## 项目名称（待定）
 课程知识树 + 桌面答疑伙伴（工作代号）
 

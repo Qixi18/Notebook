@@ -1,0 +1,28 @@
+# Frontend dependencies and build output
+node_modules/
+dist/
+
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Local configuration and data
+.env
+.env.*
+!.env.example
+data/*
+!data/.gitkeep
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Test and log output
+*.log
+coverage/
+

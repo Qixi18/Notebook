@@ -1,0 +1,30 @@
+[project]
+name = "notebook-backend"
+version = "0.1.0"
+description = "Local backend for the NoteBuddy learning notebook prototype"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "python-multipart>=0.0.9",
+    "python-pptx>=1.0.2",
+    "sqlalchemy>=2.0.36",
+    "uvicorn[standard]>=0.34.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.0",
+    "pytest>=8.3.0",
+    "ruff>=0.11.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+ignore = ["B008", "BLE001"]
