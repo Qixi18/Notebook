@@ -3,7 +3,15 @@ $repo = Split-Path -Parent $PSScriptRoot
 
 Push-Location (Join-Path $repo 'apps\backend')
 try {
+    uv run ruff check app tests
     uv run pytest
+} finally {
+    Pop-Location
+}
+
+Push-Location (Join-Path $repo 'apps\desktop')
+try {
+    npm run build:main
 } finally {
     Pop-Location
 }
@@ -14,4 +22,3 @@ try {
 } finally {
     Pop-Location
 }
-

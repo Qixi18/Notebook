@@ -56,3 +56,38 @@ export type AssistantResponse = {
   mode: string
 }
 
+export type Note = {
+  id: string
+  course_id: string
+  knowledge_node_id: string
+  title: string
+  content_markdown: string
+  content_origin: string
+  user_locked: boolean
+  revision_number: number
+  created_at: string
+  updated_at: string
+}
+
+export type KnowledgeNode = {
+  id: string
+  course_id: string
+  name: string
+  summary: string | null
+  status: string
+}
+
+export type KnowledgeEdge = {
+  id: string
+  course_id: string
+  source_node_id: string
+  target_node_id: string
+  relation_type: string
+  confidence: number | null
+  created_by: string
+}
+
+export type KnowledgeGraph = {
+  nodes: KnowledgeNode[]
+  edges: KnowledgeEdge[]
+}

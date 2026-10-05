@@ -1,8 +1,10 @@
 import type {
   AssistantResponse,
   Course,
+  KnowledgeGraph,
   Job,
   Material,
+  Note,
   Page,
   UploadResponse,
 } from './types'
@@ -36,6 +38,18 @@ export const api = {
   },
   getJob: (jobId: string) => request<Job>(`/api/v1/jobs/${jobId}`),
   listPages: (materialId: string) => request<Page[]>(`/api/v1/materials/${materialId}/pages`),
+  listNotes: (courseId: string) => request<Note[]>(`/api/v1/courses/${courseId}/notes`),
+  getKnowledgeGraph: (courseId: string) =>
+    request<KnowledgeGraph>(`/api/v1/courses/${courseId}/knowledge-graph`),
+  updateNote: (noteId: string, contentMarkdown: string, expectedRevisionNumber: number) =>
+    request<Note>(`/api/v1/notes/${noteId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content_markdown: contentMarkdown,
+        expected_revision_number: expectedRevisionNumber,
+      }),
+    }),
   askAssistant: (courseId: string, question: string, materialId?: string, pageNumber?: number) =>
     request<AssistantResponse>(`/api/v1/courses/${courseId}/assistant`, {
       method: 'POST',
@@ -43,4 +57,3 @@ export const api = {
       body: JSON.stringify({ question, material_id: materialId, page_number: pageNumber }),
     }),
 }
-

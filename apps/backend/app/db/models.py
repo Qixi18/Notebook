@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import ForeignKey, Index, String, Text
+from sqlalchemy import Column, ForeignKey, Index, String, Table, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
@@ -15,6 +15,25 @@ def new_id() -> str:
 
 def utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+note_source_refs = Table(
+    "note_source_refs",
+    Base.metadata,
+    Column("note_id", ForeignKey("notes.id", ondelete="CASCADE"), primary_key=True),
+    Column("source_ref_id", ForeignKey("source_refs.id", ondelete="CASCADE"), primary_key=True),
+)
+
+knowledge_node_source_refs = Table(
+    "knowledge_node_source_refs",
+    Base.metadata,
+    Column(
+        "knowledge_node_id",
+        ForeignKey("knowledge_nodes.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column("source_ref_id", ForeignKey("source_refs.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class Course(Base):
@@ -100,3 +119,153 @@ class PageBlock(Base):
     is_bold: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     page: Mapped[MaterialPage] = relationship(back_populates="blocks")
+    source_refs: Mapped[list[SourceRef]] = relationship(
+        back_populates="page_block", cascade="all, delete-orphan"
+    )
+    retrieval_chunk: Mapped[RetrievalChunk | None] = relationship(
+        back_populates="page_block", uselist=False, cascade="all, delete-orphan"
+    )
+
+
+class SourceRef(Base):
+    __tablename__ = "source_refs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    page_block_id: Mapped[str] = mapped_column(ForeignKey("page_blocks.id", ondelete="CASCADE"))
+    source_type: Mapped[str] = mapped_column(String(40), default="course_material", nullable=False)
+    quote: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+
+    page_block: Mapped[PageBlock] = relationship(back_populates="source_refs")
+    notes: Mapped[list[Note]] = relationship(
+        secondary=note_source_refs, back_populates="source_refs"
+    )
+    knowledge_nodes: Mapped[list[KnowledgeNode]] = relationship(
+        secondary=knowledge_node_source_refs, back_populates="source_refs"
+    )
+
+
+class KnowledgeNode(Base):
+    __tablename__ = "knowledge_nodes"
+    __table_args__ = (
+        UniqueConstraint("course_id", "name", name="uq_knowledge_nodes_course_name"),
+        Index("ix_knowledge_nodes_course_id", "course_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    course_id: Mapped[str] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(300), nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="active", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now, nullable=False)
+
+    course: Mapped[Course] = relationship()
+    note: Mapped[Note | None] = relationship(back_populates="knowledge_node", uselist=False)
+    source_refs: Mapped[list[SourceRef]] = relationship(
+        secondary=knowledge_node_source_refs, back_populates="knowledge_nodes"
+    )
+    outgoing_edges: Mapped[list[KnowledgeEdge]] = relationship(
+        foreign_keys="KnowledgeEdge.source_node_id",
+        back_populates="source_node",
+        cascade="all, delete-orphan",
+    )
+    incoming_edges: Mapped[list[KnowledgeEdge]] = relationship(
+        foreign_keys="KnowledgeEdge.target_node_id",
+        back_populates="target_node",
+        cascade="all, delete-orphan",
+    )
+
+
+class KnowledgeEdge(Base):
+    __tablename__ = "knowledge_edges"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_node_id",
+            "target_node_id",
+            "relation_type",
+            name="uq_knowledge_edges_relation",
+        ),
+        Index("ix_knowledge_edges_course_id", "course_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    course_id: Mapped[str] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"))
+    source_node_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_nodes.id", ondelete="CASCADE")
+    )
+    target_node_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_nodes.id", ondelete="CASCADE")
+    )
+    relation_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    confidence: Mapped[float | None] = mapped_column(nullable=True)
+    created_by: Mapped[str] = mapped_column(String(30), default="system", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+
+    course: Mapped[Course] = relationship()
+    source_node: Mapped[KnowledgeNode] = relationship(
+        foreign_keys=[source_node_id], back_populates="outgoing_edges"
+    )
+    target_node: Mapped[KnowledgeNode] = relationship(
+        foreign_keys=[target_node_id], back_populates="incoming_edges"
+    )
+
+
+class Note(Base):
+    __tablename__ = "notes"
+    __table_args__ = (Index("ix_notes_course_id", "course_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    course_id: Mapped[str] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"))
+    knowledge_node_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_nodes.id", ondelete="CASCADE"), unique=True
+    )
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    content_markdown: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    content_origin: Mapped[str] = mapped_column(String(30), default="ai", nullable=False)
+    user_locked: Mapped[bool] = mapped_column(default=False, nullable=False)
+    revision_number: Mapped[int] = mapped_column(default=1, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now, nullable=False)
+
+    course: Mapped[Course] = relationship()
+    knowledge_node: Mapped[KnowledgeNode] = relationship(back_populates="note")
+    revisions: Mapped[list[NoteRevision]] = relationship(
+        back_populates="note", cascade="all, delete-orphan", order_by="NoteRevision.revision_number"
+    )
+    source_refs: Mapped[list[SourceRef]] = relationship(
+        secondary=note_source_refs, back_populates="notes"
+    )
+
+
+class NoteRevision(Base):
+    __tablename__ = "note_revisions"
+    __table_args__ = (Index("ix_note_revisions_note_id", "note_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    note_id: Mapped[str] = mapped_column(ForeignKey("notes.id", ondelete="CASCADE"))
+    revision_number: Mapped[int] = mapped_column(nullable=False)
+    content_markdown: Mapped[str] = mapped_column(Text, nullable=False)
+    content_origin: Mapped[str] = mapped_column(String(30), nullable=False)
+    user_locked: Mapped[bool] = mapped_column(default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+
+    note: Mapped[Note] = relationship(back_populates="revisions")
+
+
+class RetrievalChunk(Base):
+    __tablename__ = "retrieval_chunks"
+    __table_args__ = (Index("ix_retrieval_chunks_course_id", "course_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    course_id: Mapped[str] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"))
+    page_block_id: Mapped[str] = mapped_column(
+        ForeignKey("page_blocks.id", ondelete="CASCADE"), unique=True
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    embedding_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+
+    course: Mapped[Course] = relationship()
+    page_block: Mapped[PageBlock] = relationship(back_populates="retrieval_chunk")

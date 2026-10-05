@@ -1,0 +1,17 @@
+{
+  "name": "notebook-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Electron shell for the NoteBuddy local learning workspace",
+  "main": "dist/main.js",
+  "scripts": {
+    "build:main": "tsc -p tsconfig.json",
+    "dev": "npm run build:main && electron .",
+    "start": "npm run build:main && electron ."
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.0",
+    "electron": "^38.1.0",
+    "typescript": "^5.9.2"
+  }
+}

@@ -58,6 +58,74 @@ class PageRead(BaseModel):
     warning: str | None
 
 
+class SourceRefRead(BaseModel):
+    id: str
+    page_block_id: str
+    source_type: str
+    quote: str
+    material_id: str
+    page_number: int
+
+
+class KnowledgeNodeRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    course_id: str
+    name: str
+    summary: str | None
+    status: str
+
+
+class KnowledgeEdgeRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    course_id: str
+    source_node_id: str
+    target_node_id: str
+    relation_type: str
+    confidence: float | None
+    created_by: str
+
+
+class KnowledgeGraphRead(BaseModel):
+    nodes: list[KnowledgeNodeRead]
+    edges: list[KnowledgeEdgeRead]
+
+
+class NoteRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    course_id: str
+    knowledge_node_id: str
+    title: str
+    content_markdown: str
+    content_origin: str
+    user_locked: bool
+    revision_number: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class NoteRevisionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    note_id: str
+    revision_number: int
+    content_markdown: str
+    content_origin: str
+    user_locked: bool
+    created_at: datetime
+
+
+class NoteUpdate(BaseModel):
+    content_markdown: str = Field(min_length=1, max_length=100000)
+    expected_revision_number: int = Field(ge=1)
+
+
 class UploadMaterialResponse(BaseModel):
     material: MaterialRead
     job: JobRead

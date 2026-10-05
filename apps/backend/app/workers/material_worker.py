@@ -3,7 +3,9 @@ from __future__ import annotations
 from app.core.config import settings
 from app.db.database import SessionLocal
 from app.db.models import MaterialPage, PageBlock, ProcessingJob
+from app.knowledge.extractor import extract_material_knowledge
 from app.parsers.pptx_parser import parse_pptx
+from app.retrieval.service import index_material
 
 
 def process_material(job_id: str) -> None:
@@ -51,6 +53,8 @@ def process_material(job_id: str) -> None:
             job.progress = max(5, int(index / max(len(parsed_pages), 1) * 95))
             db.commit()
 
+        extract_material_knowledge(db, material.id)
+        index_material(db, material.id)
         material.status = "completed"
         job.status = "completed"
         job.progress = 100

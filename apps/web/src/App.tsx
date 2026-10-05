@@ -1,8 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
+import ReactMarkdown from 'react-markdown'
+import rehypeKatex from 'rehype-katex'
+import remarkMath from 'remark-math'
 
 import { api } from './api'
-import type { AssistantSource, Course, Job, Material, Page } from './types'
+import type {
+  AssistantSource,
+  Course,
+  Job,
+  KnowledgeGraph,
+  Material,
+  Note,
+  Page,
+} from './types'
 
 type ChatMessage = {
   role: 'user' | 'assistant'
@@ -24,6 +35,12 @@ function App() {
   const [selectedMaterialId, setSelectedMaterialId] = useState<string>()
   const [pages, setPages] = useState<Page[]>([])
   const [selectedPageNumber, setSelectedPageNumber] = useState<number>()
+  const [notes, setNotes] = useState<Note[]>([])
+  const [selectedNoteId, setSelectedNoteId] = useState<string>()
+  const [noteDraft, setNoteDraft] = useState('')
+  const [editingNote, setEditingNote] = useState(false)
+  const [activeView, setActiveView] = useState<'notes' | 'graph'>('notes')
+  const [graph, setGraph] = useState<KnowledgeGraph>({ nodes: [], edges: [] })
   const [newCourseName, setNewCourseName] = useState('')
   const [uploadFile, setUploadFile] = useState<File>()
   const [lectureTitle, setLectureTitle] = useState('第 1 讲')
@@ -37,11 +54,13 @@ function App() {
   const [job, setJob] = useState<Job>()
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [noteSaving, setNoteSaving] = useState(false)
   const [error, setError] = useState<string>()
 
   const selectedCourse = courses.find((course) => course.id === selectedCourseId)
   const selectedMaterial = materials.find((material) => material.id === selectedMaterialId)
   const selectedPage = pages.find((page) => page.page_number === selectedPageNumber)
+  const selectedNote = notes.find((note) => note.id === selectedNoteId)
 
   const courseSubtitle = useMemo(() => {
     if (!selectedCourse) return '从左侧创建或选择一门课程'
@@ -69,6 +88,21 @@ function App() {
   }, [selectedMaterialId])
 
   useEffect(() => {
+    if (!selectedCourseId) {
+      setNotes([])
+      setGraph({ nodes: [], edges: [] })
+      return
+    }
+    void refreshNotes(selectedCourseId)
+    void refreshGraph(selectedCourseId)
+  }, [selectedCourseId])
+
+  useEffect(() => {
+    setNoteDraft(selectedNote?.content_markdown ?? '')
+    setEditingNote(false)
+  }, [selectedNoteId, selectedNote?.content_markdown])
+
+  useEffect(() => {
     if (!job || job.status === 'completed' || job.status === 'failed') return
     const timer = window.setInterval(async () => {
       try {
@@ -77,6 +111,10 @@ function App() {
         if (nextJob.status === 'completed' && selectedMaterialId) {
           await refreshPages(selectedMaterialId)
           if (selectedCourseId) await refreshMaterials(selectedCourseId)
+          if (selectedCourseId) {
+            await refreshNotes(selectedCourseId)
+            await refreshGraph(selectedCourseId)
+          }
         }
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : '任务状态读取失败')
@@ -119,6 +157,45 @@ function App() {
       setSelectedPageNumber((current) => current ?? nextPages[0]?.page_number)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '页面读取失败')
+    }
+  }
+
+  async function refreshNotes(courseId: string) {
+    try {
+      const nextNotes = await api.listNotes(courseId)
+      setNotes(nextNotes)
+      setSelectedNoteId((current) =>
+        current && nextNotes.some((note) => note.id === current) ? current : nextNotes[0]?.id,
+      )
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '笔记读取失败')
+    }
+  }
+
+  async function refreshGraph(courseId: string) {
+    try {
+      setGraph(await api.getKnowledgeGraph(courseId))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '知识树读取失败')
+    }
+  }
+
+  async function handleSaveNote() {
+    if (!selectedNote) return
+    try {
+      setNoteSaving(true)
+      const updated = await api.updateNote(
+        selectedNote.id,
+        noteDraft,
+        selectedNote.revision_number,
+      )
+      setNotes((current) => current.map((note) => (note.id === updated.id ? updated : note)))
+      setNoteDraft(updated.content_markdown)
+      setEditingNote(false)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '笔记保存失败')
+    } finally {
+      setNoteSaving(false)
     }
   }
 
@@ -261,9 +338,19 @@ function App() {
         <section className="content-grid">
           <div className="note-column">
             <div className="tab-row">
-              <button className="tab tab-active">笔记</button>
-              <button className="tab">思维导图 <span>即将开始</span></button>
-              <button className="tab">覆盖总览 <span>即将开始</span></button>
+              <button
+                className={`tab ${activeView === 'notes' ? 'tab-active' : ''}`}
+                onClick={() => setActiveView('notes')}
+              >
+                笔记
+              </button>
+              <button
+                className={`tab ${activeView === 'graph' ? 'tab-active' : ''}`}
+                onClick={() => setActiveView('graph')}
+              >
+                思维导图
+              </button>
+              <button className="tab">覆盖总览 <span>下一阶段</span></button>
             </div>
 
             <div className="note-card">
@@ -368,6 +455,100 @@ function App() {
                   <p>{selectedPage.raw_text || '本页没有可展示的文本。'}</p>
                   {selectedPage.warning && <div className="warning-note">⚠ {selectedPage.warning}</div>}
                 </article>
+              )}
+
+              {activeView === 'notes' && (
+                <section className="generated-note-section">
+                  <div className="section-heading">
+                    <span>知识点笔记</span>
+                    <small>{notes.length} 条 · 用户修改后自动保护</small>
+                  </div>
+                  {notes.length === 0 && (
+                    <div className="empty-block">解析资料后，系统会根据页面标题和文本生成第一版知识点笔记。</div>
+                  )}
+                  {notes.length > 0 && (
+                    <div className="note-editor-layout">
+                      <div className="note-index">
+                        {notes.map((note) => (
+                          <button
+                            className={`note-index-row ${note.id === selectedNoteId ? 'note-index-row-active' : ''}`}
+                            key={note.id}
+                            onClick={() => setSelectedNoteId(note.id)}
+                          >
+                            <strong>{note.title}</strong>
+                            <small>{note.user_locked ? '用户已锁定' : 'AI 草稿'} · v{note.revision_number}</small>
+                          </button>
+                        ))}
+                      </div>
+                      {selectedNote && (
+                        <div className="note-editor-card">
+                          <div className="note-editor-toolbar">
+                            <div>
+                              <span className="eyebrow">{selectedNote.content_origin === 'user' ? '用户版本' : 'AI 初稿'}</span>
+                              <h4>{selectedNote.title}</h4>
+                            </div>
+                            {!editingNote && <button className="ghost-button" onClick={() => setEditingNote(true)}>编辑笔记</button>}
+                          </div>
+                          {editingNote ? (
+                            <>
+                              <textarea
+                                className="note-textarea"
+                                value={noteDraft}
+                                onChange={(event) => setNoteDraft(event.target.value)}
+                                aria-label="笔记 Markdown 内容"
+                              />
+                              <div className="note-edit-actions">
+                                <span>保存后将生成新版本，并阻止 AI 自动覆盖。</span>
+                                <div>
+                                  <button className="ghost-button" onClick={() => { setNoteDraft(selectedNote.content_markdown); setEditingNote(false) }}>取消</button>
+                                  <button className="primary-button" onClick={() => void handleSaveNote()} disabled={noteSaving || !noteDraft.trim()}>{noteSaving ? '保存中…' : '保存并锁定'}</button>
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="markdown-preview">
+                              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                                {selectedNote.content_markdown}
+                              </ReactMarkdown>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {activeView === 'graph' && (
+                <section className="graph-section">
+                  <div className="section-heading">
+                    <span>课程知识点</span>
+                    <small>{graph.nodes.length} 个节点 · {graph.edges.length} 条关系</small>
+                  </div>
+                  {graph.nodes.length === 0 && <div className="empty-block">解析资料后，知识点节点会在这里生成。</div>}
+                  <div className="graph-node-list">
+                    {graph.nodes.map((node) => (
+                      <button
+                        className="graph-node-card"
+                        key={node.id}
+                        onClick={() => {
+                          const note = notes.find((item) => item.knowledge_node_id === node.id)
+                          if (note) { setActiveView('notes'); setSelectedNoteId(note.id) }
+                        }}
+                      >
+                        <strong>{node.name}</strong>
+                        <span>{node.summary ?? '暂无摘要'}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {graph.edges.length > 0 && (
+                    <div className="edge-list">
+                      {graph.edges.map((edge) => (
+                        <span className="edge-chip" key={edge.id}>{edge.source_node_id.slice(0, 6)} → {edge.target_node_id.slice(0, 6)} · {edge.relation_type}</span>
+                      ))}
+                    </div>
+                  )}
+                </section>
               )}
             </div>
           </div>
