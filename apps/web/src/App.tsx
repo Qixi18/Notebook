@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEvent, ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
 import remarkMath from 'remark-math'
@@ -26,6 +26,51 @@ const statusLabels: Record<string, string> = {
   processing: '解析中',
   completed: '已完成',
   failed: '解析失败',
+}
+
+type TechIconName =
+  | 'brand'
+  | 'overview'
+  | 'materials'
+  | 'pages'
+  | 'nodes'
+  | 'sources'
+  | 'note'
+  | 'chat'
+  | 'settings'
+  | 'refresh'
+  | 'spark'
+  | 'send'
+
+function TechIcon({ name, size = 20 }: { name: TechIconName; size?: number }) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.75,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+  }
+
+  const paths: Record<TechIconName, ReactNode> = {
+    brand: <><rect x="3.5" y="3.5" width="17" height="17" rx="5" /><path d="M8 16V8l8 8V8" /></>,
+    overview: <><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M8 12h8M8 8h5M8 16h4" /><circle cx="17" cy="8" r="1" /></>,
+    materials: <><path d="M5 6.5h5l1.5 2H19a2 2 0 0 1 2 2v6A2 2 0 0 1 19 18.5H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z" /><path d="M3 10h18" /></>,
+    pages: <><rect x="5" y="3.5" width="12" height="15" rx="2" /><path d="M9 7.5h4M9 11h5M9 14.5h3" /><path d="M17 7h2a1.5 1.5 0 0 1 1.5 1.5V19a1.5 1.5 0 0 1-1.5 1.5H9.5A1.5 1.5 0 0 1 8 19v-.5" /></>,
+    nodes: <><circle cx="6" cy="7" r="2.2" /><circle cx="18" cy="6" r="2.2" /><circle cx="12" cy="17" r="2.2" /><path d="m7.8 8.2 2.4 6.2M16.1 7.7l-2.5 6.7M8.2 7.2h7.6" /></>,
+    sources: <><path d="M8.5 6.5h7a3 3 0 1 1 0 6h-3" /><path d="M15.5 17.5h-7a3 3 0 1 1 0-6h3" /><path d="m9.5 12 5-5M9.5 12l5 5" /></>,
+    note: <><path d="M6 3.5h9l3 3v14H6a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2Z" /><path d="M15 3.5v4h4M8 11h6M8 15h8" /></>,
+    chat: <><path d="M5.5 5.5h13a2.5 2.5 0 0 1 2.5 2.5v7a2.5 2.5 0 0 1-2.5 2.5h-8l-4.5 3v-3.4A2.5 2.5 0 0 1 3.5 15V8a2.5 2.5 0 0 1 2-2.5Z" /><path d="M8 11.5h.01M12 11.5h.01M16 11.5h.01" /></>,
+    settings: <><circle cx="12" cy="12" r="3" /><path d="M19.2 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.1 2.1-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.2h-3v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1-2.1-2.1.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H5v-3h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 2.1-2.1.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V4h3v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 2.1 2.1-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.2v3h-.2a1.7 1.7 0 0 0-1.5 1Z" /></>,
+    refresh: <><path d="M20 11a8 8 0 0 0-14.7-4.2L3 9" /><path d="M3 4v5h5M4 13a8 8 0 0 0 14.7 4.2L21 15" /><path d="M21 20v-5h-5" /></>,
+    spark: <><path d="m12 3 1.3 5.7L19 10l-5.7 1.3L12 17l-1.3-5.7L5 10l5.7-1.3L12 3Z" /><path d="m19 15 .5 2.5L22 18l-2.5.5L19 21l-.5-2.5L16 18l2.5-.5L19 15Z" /></>,
+    send: <><path d="m21 3-7.4 18-3.3-7.3L3 10.4 21 3Z" /><path d="m10.3 13.7 4.1-4.1" /></>,
+  }
+
+  return <svg {...common}>{paths[name]}</svg>
 }
 
 function App() {
@@ -261,14 +306,28 @@ function App() {
     }
   }
 
+  function focusWorkspaceSection(sectionId: string) {
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   return (
     <div className="app-shell">
       <aside className="icon-rail" aria-label="主导航">
-        <div className="brand-mark">N</div>
-        <button className="rail-button rail-button-active" title="笔记">▤</button>
-        <button className="rail-button" title="知识树">⌘</button>
-        <button className="rail-button" title="资料">▱</button>
-        <button className="rail-button" title="设置">⚙</button>
+        <div className="brand-mark" title="NoteBuddy">
+          <TechIcon name="brand" size={21} />
+        </div>
+        <button className={`rail-button ${activeView === 'notes' ? 'rail-button-active' : ''}`} title="核心笔记" aria-label="查看核心笔记" onClick={() => setActiveView('notes')}>
+          <TechIcon name="note" />
+        </button>
+        <button className={`rail-button ${activeView === 'graph' ? 'rail-button-active' : ''}`} title="知识节点" aria-label="查看知识节点" onClick={() => setActiveView('graph')}>
+          <TechIcon name="nodes" />
+        </button>
+        <button className="rail-button" title="课程资料" aria-label="定位到课程资料" onClick={() => focusWorkspaceSection('course-materials')}>
+          <TechIcon name="materials" />
+        </button>
+        <button className="rail-button rail-button-bottom" title="设置（后续开放）" aria-label="设置（后续开放）" disabled>
+          <TechIcon name="settings" />
+        </button>
       </aside>
 
       <aside className="course-sidebar">
@@ -284,7 +343,7 @@ function App() {
           <input
             value={newCourseName}
             onChange={(event) => setNewCourseName(event.target.value)}
-            placeholder="新建课程，例如：国际经济学"
+            placeholder="输入课程名称"
             aria-label="新课程名称"
           />
           <button type="submit" disabled={busy || !newCourseName.trim()}>+</button>
@@ -301,7 +360,7 @@ function App() {
               key={course.id}
               onClick={() => setSelectedCourseId(course.id)}
             >
-              <span className="course-icon">◈</span>
+              <span className="course-icon"><TechIcon name="overview" size={17} /></span>
               <span>
                 <strong>{course.name}</strong>
                 <small>{course.id === selectedCourseId ? '当前课程' : '打开课程'}</small>
@@ -309,6 +368,34 @@ function App() {
             </button>
           ))}
         </div>
+
+        <nav className="course-workbench-nav" aria-label="当前课程目录">
+          <div className="sidebar-nav-heading">
+            <span>当前课程</span>
+            {selectedCourse && <small>{selectedCourse.name}</small>}
+          </div>
+          <button className="sidebar-nav-item" onClick={() => focusWorkspaceSection('workspace-top')}>
+            <TechIcon name="overview" size={18} /><span>课程总览</span>
+          </button>
+          <button className="sidebar-nav-item" onClick={() => focusWorkspaceSection('course-materials')}>
+            <TechIcon name="materials" size={18} /><span>课程资料</span><small>{materials.length}</small>
+          </button>
+          <button className="sidebar-nav-item" onClick={() => focusWorkspaceSection('page-preview')}>
+            <TechIcon name="pages" size={18} /><span>解析页面</span><small>{pages.length}</small>
+          </button>
+          <button className={`sidebar-nav-item ${activeView === 'graph' ? 'sidebar-nav-item-active' : ''}`} onClick={() => setActiveView('graph')}>
+            <TechIcon name="nodes" size={18} /><span>知识节点</span><small>{graph.nodes.length}</small>
+          </button>
+          <button className="sidebar-nav-item" onClick={() => focusWorkspaceSection('source-reference')}>
+            <TechIcon name="sources" size={18} /><span>来源引用</span>
+          </button>
+          <button className={`sidebar-nav-item ${activeView === 'notes' ? 'sidebar-nav-item-active' : ''}`} onClick={() => setActiveView('notes')}>
+            <TechIcon name="note" size={18} /><span>核心笔记</span><small>{notes.length}</small>
+          </button>
+          <button className="sidebar-nav-item" onClick={() => focusWorkspaceSection('course-assistant')}>
+            <TechIcon name="chat" size={18} /><span>课程问答</span>
+          </button>
+        </nav>
 
         <div className="sidebar-footer">
           <span className="status-dot" /> 本地 Demo · 数据保存在本机
@@ -318,13 +405,13 @@ function App() {
       <main className="workspace">
         <header className="workspace-header">
           <div>
-            <span className="eyebrow">课程工作区</span>
+            <span className="eyebrow">NOTE BUDDY / LOCAL LEARNING SPACE</span>
             <h2>{selectedCourse?.name ?? '开始建立你的第一门课程'}</h2>
             <p>{courseSubtitle}</p>
           </div>
           <div className="header-actions">
-            <span className="prototype-pill">初版原型</span>
-            <button className="ghost-button" onClick={() => void refreshCourses()}>↻ 刷新</button>
+            <span className="prototype-pill">本地学习空间</span>
+            <button className="ghost-button icon-text-button" onClick={() => void refreshCourses()}><TechIcon name="refresh" size={15} />刷新</button>
           </div>
         </header>
 
@@ -342,19 +429,33 @@ function App() {
                 className={`tab ${activeView === 'notes' ? 'tab-active' : ''}`}
                 onClick={() => setActiveView('notes')}
               >
-                笔记
+                核心笔记
               </button>
               <button
                 className={`tab ${activeView === 'graph' ? 'tab-active' : ''}`}
                 onClick={() => setActiveView('graph')}
               >
-                思维导图
+                知识节点
               </button>
-              <button className="tab">覆盖总览 <span>下一阶段</span></button>
             </div>
 
             <div className="note-card">
-              <div className="note-toolbar">
+              <div className="note-content">
+              {!selectedCourse ? (
+                <section className="onboarding-card" id="workspace-top">
+                  <div className="onboarding-icon"><TechIcon name="spark" size={28} /></div>
+                  <span className="eyebrow">从课程到核心笔记</span>
+                  <h3>先创建一门课程，开始第一段学习旅程</h3>
+                  <p>课程建立后，上传 PPTX 即可逐页解析、提取知识点，并生成可编辑且带来源引用的核心笔记。</p>
+                  <div className="onboarding-steps">
+                    <div><span>01</span><strong>创建课程</strong><small>在左侧输入课程名称</small></div>
+                    <div><span>02</span><strong>上传 PPTX</strong><small>自动进行逐页解析</small></div>
+                    <div><span>03</span><strong>阅读与追问</strong><small>查看笔记和引用依据</small></div>
+                  </div>
+                </section>
+              ) : (
+                <>
+              <div className="note-toolbar" id="workspace-top">
                 <div>
                   <span className="eyebrow">当前学习材料</span>
                   <h3>{selectedMaterial?.lecture_title ?? '还没有选择讲次'}</h3>
@@ -398,7 +499,7 @@ function App() {
                 </div>
               )}
 
-              <div className="material-section">
+              <div className="material-section" id="course-materials">
                 <div className="section-heading">
                   <span>课程资料</span>
                   <small>{materials.length} 份</small>
@@ -410,7 +511,7 @@ function App() {
                     key={material.id}
                     onClick={() => setSelectedMaterialId(material.id)}
                   >
-                    <span className="material-icon">P</span>
+                    <span className="material-icon"><TechIcon name="materials" size={15} /></span>
                     <span className="material-info">
                       <strong>{material.lecture_title}</strong>
                       <small>{material.original_filename} · {material.page_count} 页</small>
@@ -420,7 +521,7 @@ function App() {
                 ))}
               </div>
 
-              <div className="page-section">
+              <div className="page-section" id="page-preview">
                 <div className="section-heading">
                   <span>逐页解析预览</span>
                   <small>{pages.length} 页</small>
@@ -446,7 +547,7 @@ function App() {
               </div>
 
               {selectedPage && (
-                <article className="page-detail">
+                <article className="page-detail" id="source-reference">
                   <div className="page-detail-heading">
                     <span className="page-number large">第 {selectedPage.page_number} 页</span>
                     <span className="source-tag">来源已定位</span>
@@ -550,15 +651,18 @@ function App() {
                   )}
                 </section>
               )}
+                </>
+              )}
+              </div>
             </div>
           </div>
 
-          <aside className="assistant-column">
+          <aside className="assistant-column" id="course-assistant">
             <div className="assistant-header">
-              <div className="avatar">✦</div>
+              <div className="avatar"><TechIcon name="spark" size={20} /></div>
               <div>
                 <span className="eyebrow">课程答疑伙伴</span>
-                <h3>Ask NoteBuddy</h3>
+                <h3>AI 学习助手</h3>
               </div>
               <span className="online-dot" />
             </div>
@@ -600,7 +704,7 @@ function App() {
               />
               <div className="question-footer">
                 <span>本地检索预览</span>
-                <button className="send-button" type="submit" disabled={!selectedCourseId || !question.trim()}>↑</button>
+                <button className="send-button" type="submit" disabled={!selectedCourseId || !question.trim()} aria-label="发送问题"><TechIcon name="send" size={15} /></button>
               </div>
             </form>
           </aside>
