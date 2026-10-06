@@ -15,6 +15,7 @@ from app.db.models import (
     MaterialPage,
     Note,
     NoteRevision,
+    NoteSourceMapping,
     PageBlock,
     SourceRef,
 )
@@ -82,6 +83,8 @@ def ensure_source_refs(db: Session, blocks: Iterable[PageBlock]) -> list[SourceR
                 page_block_id=block.id,
                 source_type="course_material",
                 quote=block.content[:1000],
+                target_label=block.location_label or block.page.location_label,
+                parser_version=block.page.material.parser_version if block.page.material else None,
             )
             db.add(source_ref)
             db.flush()
@@ -160,6 +163,23 @@ def ensure_note(
             )
         )
     add_unique_sources(note.source_refs, source_refs)
+    existing = {
+        (mapping.note_id, mapping.source_ref_id, mapping.fragment_key)
+        for mapping in db.scalars(
+            select(NoteSourceMapping).where(NoteSourceMapping.note_id == note.id)
+        ).all()
+    }
+    for source_ref in source_refs:
+        key = (note.id, source_ref.id, "whole-note")
+        if key not in existing:
+            db.add(NoteSourceMapping(
+                note_id=note.id,
+                source_ref_id=source_ref.id,
+                fragment_key="whole-note",
+                citation_type="whole_note",
+                status=source_ref.status,
+                parser_version=source_ref.parser_version,
+            ))
     return note
 
 

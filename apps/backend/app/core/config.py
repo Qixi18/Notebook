@@ -31,7 +31,7 @@ class Settings:
     embedding_base_url: str | None
     embedding_api_key: str | None
     embedding_model: str | None
-    allowed_extensions: tuple[str, ...] = (".pptx",)
+    allowed_extensions: tuple[str, ...] = (".pptx", ".pdf", ".docx")
 
     @property
     def originals_dir(self) -> Path:
@@ -62,4 +62,7 @@ settings = Settings(
     embedding_base_url=os.getenv("EMBEDDING_BASE_URL") or None,
     embedding_api_key=os.getenv("EMBEDDING_API_KEY") or None,
     embedding_model=os.getenv("EMBEDDING_MODEL") or None,
+    allowed_extensions=tuple(
+        item.strip().lower() for item in os.getenv("NOTEBOOK_ALLOWED_EXTENSIONS", ".pptx,.pdf,.docx").split(",") if item.strip()
+    ) or (".pptx",),
 )

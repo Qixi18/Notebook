@@ -20,6 +20,8 @@ class MaterialRead(BaseModel):
     status: str
     page_count: int
     created_at: datetime
+    parser_version: str | None = None
+    document_warning: str | None = None
     deleted_at: datetime | None = None
 
 
@@ -34,6 +36,11 @@ class PageRead(BaseModel):
     raw_text: str
     parse_status: str
     warning: str | None
+    location_type: str = "page"
+    location_label: str | None = None
+    stable_location_key: str | None = None
+    extraction_method: str = "native_text"
+    confidence: float | None = None
 
 
 
@@ -44,6 +51,10 @@ class SourceRefRead(BaseModel):
     quote: str
     material_id: str
     page_number: int
+    location_type: str = "page"
+    location_label: str | None = None
+    status: str = "active"
+    target_label: str | None = None
 
 
 

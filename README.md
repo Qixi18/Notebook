@@ -6,8 +6,8 @@
 
 - `apps/web`：React + TypeScript + Vite 三栏学习工作区
 - `apps/backend`：FastAPI + SQLite 课程、资料、知识树、笔记版本和检索 API
-- 当前可完成：创建课程、上传 PPTX、逐页解析、页面来源引用、基础知识点提取、知识树、可编辑笔记、用户编辑保护和课程范围检索问答
-- 当前上传格式限制为 PPTX；PDF、DOCX 解析器属于后续阶段，尚未接入
+- 当前可完成：创建课程、上传 PPTX/PDF/DOCX、按页或章节解析、页面来源引用、基础知识点提取、知识树、可编辑笔记、用户编辑保护和课程范围检索问答
+- 阶段二已接入统一解析契约、PDF 文字层、DOCX 章节/表格位置、PPTX 表格对象定位和来源覆盖统计；扫描 PDF 会明确标记为 OCR 候选，不会把 OCR 失败伪装成原文
 - Embedding 已提供 OpenAI-compatible 接口适配；未配置时使用本地关键词检索，配置后使用向量相似度混合检索
 - DeepSeek 已提供结构化 JSON 提取和 RAG 回答适配；未配置 `DEEPSEEK_API_KEY` 时自动使用本地保守降级
 - Electron 已建立安全桌面包装骨架，完整安装包和后端进程托管仍需下一阶段联调
@@ -130,7 +130,7 @@ EMBEDDING_MODEL=
 
 ### 4.2 关键技术模块
 
-- **PPT解析**：使用 `python-pptx` 提取文本内容及字体、加粗、层级等结构信息，作为重点判断的结构信号之一。
+- **课件解析**：使用 `python-pptx`、`pypdf` 和 `python-docx` 提取文本、表格、章节位置及字体/加粗等结构信号；解析结果统一包含稳定位置键、提取方式、置信度和告警。
 - **知识点结构化存储**：将提取内容整理为结构化记录（知识点名称、定义、所属章节、关联知识点、首次出现位置等），便于后续去重与关联展示，而非仅存储纯文本。
 - **向量检索与知识库整合**：
   - 使用轻量级 embedding 模型 + 向量库（如 Chroma）实现语义检索
@@ -145,7 +145,7 @@ EMBEDDING_MODEL=
 
 | 层级 | 选型 |
 |---|---|
-| PPT解析 | python-pptx |
+| PPT/PDF/DOCX解析 | python-pptx、pypdf、python-docx |
 | 向量检索 | 轻量级embedding模型 + Chroma（或参考Quivr的RAG流水线） |
 | 结构化存储 | SQLite / PostgreSQL |
 | 知识树前端 | Web前端（D3.js等可视化库） |

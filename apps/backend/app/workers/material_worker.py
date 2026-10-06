@@ -16,7 +16,7 @@ from app.db.models import (
     WebSource,
 )
 from app.knowledge.extractor import extract_material_knowledge
-from app.parsers.pptx_parser import parse_pptx
+from app.parsers.document import parse_document
 from app.retrieval.service import index_material
 from app.web_search.tavily import WebSearchError
 from app.web_search.tavily import configured as web_search_configured
@@ -40,34 +40,48 @@ def process_material(job_id: str) -> None:
         db.commit()
 
         source_path = settings.originals_dir / material.stored_filename
-        if source_path.suffix.lower() != ".pptx":
-            raise ValueError("初版解析器目前只支持 .pptx，PDF 和 DOCX 将在后续版本接入")
+        if source_path.suffix.lower() not in settings.allowed_extensions:
+            raise ValueError("该资料格式未启用解析器")
 
         # A retry after knowledge/index failure reuses committed pages and
         # their SourceRef IDs. Replacing them would destroy note provenance.
         if not material.pages or material.page_count != len(material.pages):
-            parsed_pages = parse_pptx(source_path)
+            parsed_document = parse_document(source_path)
+            parsed_pages = parsed_document.pages
             material.pages.clear()
             material.page_count = len(parsed_pages)
+            material.parser_version = parsed_document.parser_version
+            material.document_warning = "；".join(parsed_document.warnings) or None
             for index, parsed_page in enumerate(parsed_pages, start=1):
                 page = MaterialPage(
                     material_id=material.id,
-                    page_number=parsed_page["page_number"],
-                    title=parsed_page["title"],
-                    raw_text=parsed_page["raw_text"],
-                    warning=parsed_page["warning"],
+                    page_number=parsed_page.page_number,
+                    title=parsed_page.title,
+                    raw_text=parsed_page.raw_text,
+                    parse_status=parsed_page.parse_status,
+                    warning=parsed_page.warning,
+                    location_type=parsed_page.location_type,
+                    location_label=parsed_page.location_label,
+                    stable_location_key=parsed_page.stable_location_key,
+                    extraction_method=parsed_page.extraction_method,
+                    confidence=parsed_page.confidence,
                 )
                 db.add(page)
                 db.flush()
-                for block in parsed_page["blocks"]:
+                for block in parsed_page.blocks:
                     db.add(
                         PageBlock(
                             page_id=page.id,
-                            block_type=block["block_type"],
-                            content=block["content"],
-                            position=block["position"],
-                            font_size=block["font_size"],
-                            is_bold=block["is_bold"],
+                            block_type=block.block_type,
+                            content=block.content,
+                            position=block.position,
+                            font_size=block.font_size,
+                            is_bold=block.is_bold,
+                            object_id=block.object_id,
+                            location_label=block.location_label,
+                            extraction_method=block.extraction_method,
+                            confidence=block.confidence,
+                            warning=block.warning,
                         )
                     )
                 job.progress = max(5, int(index / max(len(parsed_pages), 1) * 95))

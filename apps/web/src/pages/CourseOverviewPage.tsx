@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+import { api } from '../api'
 import { featureDescriptions, featureLabels, featurePath, useWorkspace, type Feature } from '../components/AppLayout'
 import { ProcessingStatus } from '../components/ProcessingStatus'
 
@@ -15,6 +17,22 @@ const materialStatus: Record<string, string> = {
 export function CourseOverviewPage() {
   const { courseId = '' } = useParams()
   const { course, courseContentLoading, materials, notes, graph, job, coursesLoading, refreshCourses } = useWorkspace()
+  const [coverage, setCoverage] = useState({ cited: 0, total: 0, review: 0 })
+
+  useEffect(() => {
+    let active = true
+    void Promise.all(materials.map((material) => api.getCoverage(material.id)))
+      .then((items) => {
+        if (!active) return
+        setCoverage({
+          cited: items.reduce((sum, item) => sum + item.cited_locations, 0),
+          total: items.reduce((sum, item) => sum + item.total_locations, 0),
+          review: items.reduce((sum, item) => sum + item.review_locations, 0),
+        })
+      })
+      .catch(() => { if (active) setCoverage({ cited: 0, total: 0, review: 0 }) })
+    return () => { active = false }
+  }, [materials])
 
   if (coursesLoading) return <div className="page-loading">正在读取课程…</div>
   if (!course) {
@@ -52,6 +70,7 @@ export function CourseOverviewPage() {
         <article className="summary-card"><span>资料页数</span><strong>{materials.reduce((total, material) => total + material.page_count, 0)}</strong><small>课件页面</small></article>
         <article className="summary-card"><span>知识点</span><strong>{graph.nodes.length}</strong><small>个课程节点</small></article>
         <article className="summary-card"><span>笔记</span><strong>{notes.length}</strong><small>条可复习内容</small></article>
+        <article className="summary-card"><span>来源覆盖</span><strong>{coverage.cited}/{coverage.total}</strong><small>{coverage.review} 个位置待检查</small></article>
       </section>
 
       {courseContentLoading ? <div className="page-loading" role="status">正在汇总课程进度…</div> : <section className="course-processing-summary" aria-label="资料处理进度">

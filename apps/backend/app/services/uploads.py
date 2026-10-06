@@ -1,4 +1,4 @@
-"""Safe PPTX ingestion; one committed material and queued job per accepted upload."""
+"""Safe multi-format ingestion; one committed material and queued job per upload."""
 
 from __future__ import annotations
 
@@ -21,14 +21,35 @@ class UploadRejected(ValueError):
         self.status_code = status_code
 
 
-def ingest_pptx(
+def _validate_container(path: Path, extension: str) -> None:
+    if extension == ".pdf":
+        with path.open("rb") as source:
+            if source.read(5) != b"%PDF-":
+                raise UploadRejected("文件扩展名是 PDF，但文件签名无效", 415)
+        try:
+            from pypdf import PdfReader
+            PdfReader(str(path))
+        except Exception as exc:
+            raise UploadRejected("PDF 文件损坏或无法读取", 415) from exc
+        return
+    try:
+        with ZipFile(path) as archive:
+            names = set(archive.namelist())
+            required = {"ppt/presentation.xml"} if extension == ".pptx" else {"word/document.xml", "[Content_Types].xml"}
+            if not required.issubset(names) or archive.testzip() is not None:
+                raise UploadRejected(f"文件不是可读取的 {extension[1:].upper()}", 415)
+    except BadZipFile as exc:
+        raise UploadRejected(f"文件不是可读取的 {extension[1:].upper()}", 415) from exc
+
+
+def ingest_document(
     db: Session, *, course_id: str, source: object, filename: str,
     lecture_title: str, topic_title: str, media_type: str | None,
     allow_duplicate: bool = False, idempotency_key: str | None = None,
 ) -> tuple[Material, ProcessingJob]:
     extension = Path(filename).suffix.lower()
     if extension not in settings.allowed_extensions:
-        raise UploadRejected("当前只支持 PPTX 文件", 415)
+        raise UploadRejected("当前支持 PPTX、PDF 和 DOCX 文件", 415)
     key = hashlib.sha256(f"{course_id}:{idempotency_key}".encode()).hexdigest() if idempotency_key else None
     if key:
         prior = db.scalar(select(ProcessingJob).where(ProcessingJob.idempotency_key == key))
@@ -53,12 +74,7 @@ def ingest_pptx(
                 digest.update(chunk)
         if size == 0:
             raise UploadRejected("文件为空或无法读取", 415)
-        try:
-            with ZipFile(temporary) as archive:
-                if "ppt/presentation.xml" not in archive.namelist() or archive.testzip() is not None:
-                    raise UploadRejected("文件不是可读取的 PPTX", 415)
-        except BadZipFile as exc:
-            raise UploadRejected("文件不是可读取的 PPTX", 415) from exc
+        _validate_container(temporary, extension)
         content_hash = digest.hexdigest()
         duplicate = db.scalar(select(Material).where(
             Material.course_id == course_id, Material.content_hash == content_hash,
@@ -67,7 +83,7 @@ def ingest_pptx(
         if duplicate is not None and not allow_duplicate:
             raise UploadRejected(f"该课程已上传相同文件：{duplicate.lecture_title}。如需作为新讲次导入，请确认。", 409)
         material_id = new_id()
-        destination = settings.originals_dir / f"{material_id}.pptx"
+        destination = settings.originals_dir / f"{material_id}{extension}"
         os.replace(temporary, destination)
         temporary = None
         material = Material(
@@ -92,3 +108,8 @@ def ingest_pptx(
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
+
+
+def ingest_pptx(db: Session, **kwargs):
+    """Backward-compatible name retained for integrations from phase one."""
+    return ingest_document(db, **kwargs)

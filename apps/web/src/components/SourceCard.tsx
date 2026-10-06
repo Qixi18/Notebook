@@ -1,12 +1,14 @@
 export function SourceCard({
   title,
   pageNumber,
+  locationLabel,
   quote,
   sourceLabel = '课程课件',
   onOpen,
 }: {
   title: string
   pageNumber: number
+  locationLabel?: string | null
   quote: string
   sourceLabel?: string
   onOpen?: () => void
@@ -15,7 +17,7 @@ export function SourceCard({
     <>
       <span className="source-card-icon" aria-hidden="true">↗</span>
       <span className="source-card-body">
-        <span className="source-card-meta">{sourceLabel} · 第 {pageNumber} 页</span>
+        <span className="source-card-meta">{sourceLabel} · {locationLabel || `第 ${pageNumber} 页`}</span>
         <strong>{title}</strong>
         {quote && <small>{quote}</small>}
       </span>

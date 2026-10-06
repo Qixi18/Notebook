@@ -82,11 +82,11 @@ export function MaterialsPage() {
       </header>
 
       <form className="material-upload-card" onSubmit={(event) => void handleUpload(event)}>
-        <div className="upload-card-heading"><span className="upload-card-icon">＋</span><div><h2>上传一份课程资料</h2><p>当前版本支持 PPTX，单文件上限 50 MB。</p></div></div>
+        <div className="upload-card-heading"><span className="upload-card-icon">＋</span><div><h2>上传一份课程资料</h2><p>支持 PPTX、PDF、DOCX，单文件上限由后端配置提供。</p></div></div>
         <div className="material-upload-fields">
           <label>章节 / 主题（可选）<input value={topicTitle} onChange={(event) => setTopicTitle(event.target.value)} maxLength={200} placeholder="例如：第一章 · 软件生命周期" /></label>
           <label>讲次名称<input value={lectureTitle} onChange={(event) => setLectureTitle(event.target.value)} maxLength={200} placeholder="例如：第 1 讲 · 软件生命周期" /></label>
-          <label className="material-file-field">选择课件<input type="file" accept=".pptx" onChange={(event) => setFile(event.target.files?.[0])} /></label>
+          <label className="material-file-field">选择课件<input type="file" accept=".pptx,.pdf,.docx" onChange={(event) => setFile(event.target.files?.[0])} /></label>
           <label><input type="checkbox" checked={allowDuplicate} onChange={(event) => setAllowDuplicate(event.target.checked)} />相同文件作为新讲次导入</label>
           <button className="primary-button" type="submit" disabled={!file || busy}>{busy ? '上传中…' : '上传并解析'}</button>
         </div>
@@ -127,12 +127,12 @@ export function MaterialsPage() {
                   {pages.map((page) => (
                     <button className={`material-page-item ${selectedPageNumber === page.page_number ? 'material-page-item-active' : ''}`} key={page.id} onClick={() => setSelectedPageNumber(page.page_number)}>
                       <span className="page-number-badge">{String(page.page_number).padStart(2, '0')}</span>
-                      <span><strong>{page.title || '未识别标题'}</strong><small>{page.raw_text ? `${page.raw_text.slice(0, 120)}${page.raw_text.length > 120 ? '…' : ''}` : '本页未识别到文本'}</small></span>
+                      <span><strong>{page.location_label || `第 ${page.page_number} 页`} · {page.title || '未识别标题'}</strong><small>{page.raw_text ? `${page.raw_text.slice(0, 120)}${page.raw_text.length > 120 ? '…' : ''}` : page.warning || '本位置未识别到文本'}</small></span>
                     </button>
                   ))}
                 </div>
               )}
-              {selectedPage && <article className="material-page-detail"><span className="eyebrow">第 {selectedPage.page_number} 页</span><h3>{selectedPage.title || '未识别标题'}</h3><p>{selectedPage.raw_text || '本页没有可展示的文本。'}</p>{selectedPage.warning && <small className="form-error">{selectedPage.warning}</small>}</article>}
+              {selectedPage && <article className="material-page-detail"><span className="eyebrow">{selectedPage.location_label || `第 ${selectedPage.page_number} 页`} · {selectedPage.extraction_method}</span><h3>{selectedPage.title || '未识别标题'}</h3><p>{selectedPage.raw_text || '本位置没有可展示的文本。'}</p>{selectedPage.warning && <small className="form-error">{selectedPage.warning}</small>}</article>}
               {selectedMaterialId && <section className="material-web-sources"><div className="panel-heading"><strong>联网补充来源</strong><span>{webSources.length}</span></div>{webSources.length ? <div className="source-card-list">{webSources.map((source) => <a className="source-card" key={source.id} href={source.url} target="_blank" rel="noreferrer"><span className="source-card-icon">↗</span><span className="source-card-body"><small className="source-card-meta">{source.site_name} · 检索于 {new Date(source.retrieved_at).toLocaleDateString('zh-CN')}</small><strong>{source.title}</strong><small>{source.snippet}</small></span></a>)}</div> : <p className="evidence-empty">此资料没有已保存的联网补充来源。搜索未配置或未找到可靠结果时不会显示虚构来源。</p>}</section>}
             </div>
           </div>

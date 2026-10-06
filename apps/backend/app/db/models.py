@@ -66,6 +66,8 @@ class Material(Base):
     page_count: Mapped[int] = mapped_column(default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    parser_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    document_warning: Mapped[str | None] = mapped_column(Text, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     course: Mapped[Course] = relationship(back_populates="materials")
@@ -121,6 +123,11 @@ class MaterialPage(Base):
     raw_text: Mapped[str] = mapped_column(Text, default="", nullable=False)
     parse_status: Mapped[str] = mapped_column(String(30), default="parsed", nullable=False)
     warning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    location_type: Mapped[str] = mapped_column(String(30), default="page", nullable=False)
+    location_label: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    stable_location_key: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    extraction_method: Mapped[str] = mapped_column(String(40), default="native_text", nullable=False)
+    confidence: Mapped[float | None] = mapped_column(nullable=True)
 
     material: Mapped[Material] = relationship(back_populates="pages")
     blocks: Mapped[list[PageBlock]] = relationship(
@@ -138,6 +145,11 @@ class PageBlock(Base):
     position: Mapped[int] = mapped_column(nullable=False)
     font_size: Mapped[float | None] = mapped_column(nullable=True)
     is_bold: Mapped[bool] = mapped_column(default=False, nullable=False)
+    object_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    location_label: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    extraction_method: Mapped[str] = mapped_column(String(40), default="native_text", nullable=False)
+    confidence: Mapped[float | None] = mapped_column(nullable=True)
+    warning: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     page: Mapped[MaterialPage] = relationship(back_populates="blocks")
     source_refs: Mapped[list[SourceRef]] = relationship(
@@ -155,6 +167,9 @@ class SourceRef(Base):
     page_block_id: Mapped[str] = mapped_column(ForeignKey("page_blocks.id", ondelete="CASCADE"))
     source_type: Mapped[str] = mapped_column(String(40), default="course_material", nullable=False)
     quote: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="active", nullable=False)
+    target_label: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    parser_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
 
     page_block: Mapped[PageBlock] = relationship(back_populates="source_refs")
@@ -290,6 +305,23 @@ class NoteRevision(Base):
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
 
     note: Mapped[Note] = relationship(back_populates="revisions")
+
+
+class NoteSourceMapping(Base):
+    __tablename__ = "note_source_mappings"
+    __table_args__ = (Index("ix_note_source_mappings_note_id", "note_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    note_id: Mapped[str] = mapped_column(ForeignKey("notes.id", ondelete="CASCADE"))
+    source_ref_id: Mapped[str] = mapped_column(ForeignKey("source_refs.id", ondelete="CASCADE"))
+    fragment_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    citation_type: Mapped[str] = mapped_column(String(40), default="whole_note", nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="active", nullable=False)
+    parser_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+
+    note: Mapped[Note] = relationship()
+    source_ref: Mapped[SourceRef] = relationship()
 
 
 class RetrievalChunk(Base):

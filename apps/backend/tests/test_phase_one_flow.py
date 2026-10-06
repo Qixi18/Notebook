@@ -37,9 +37,18 @@ def test_isolated_pptx_flow(tmp_path):
             assert client.get(f"/api/v1/jobs/{first['job']['id']}").json()['status'] == 'completed'
             pages = client.get(f"/api/v1/materials/{first['material']['id']}/pages").json()
             assert len(pages) == 1 and '测试知识点' in pages[0]['raw_text']
+            coverage = client.get(f"/api/v1/materials/{first['material']['id']}/coverage").json()
+            assert coverage['total_locations'] == 1
+            assert coverage['cited_locations'] == 1
+            assert coverage['locations'][0]['status'] == 'cited'
             notes = client.get(f'/api/v1/courses/{course_id}/notes').json()
             assert notes
             note = notes[0]
+            sources = client.get(f"/api/v1/notes/{note['id']}/sources")
+            assert sources.status_code == 200, sources.text
+            assert sources.json()[0]['location_label'] == '第 1 页'
+            source_id = sources.json()[0]['id']
+            assert client.get(f'/api/v1/sources/{source_id}').json()['status'] == 'active'
             edited = client.patch(f"/api/v1/notes/{note['id']}", json={
                 'content_markdown':'# 我的用户正文',
                 'expected_revision_number':note['revision_number'],

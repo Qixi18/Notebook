@@ -14,6 +14,7 @@ from app.db.models import (
     WebSource,
 )
 from app.schemas.api import (
+    CoverageRead,
     DeletionPreview,
     JobRead,
     MaterialRead,
@@ -21,12 +22,13 @@ from app.schemas.api import (
     UploadMaterialResponse,
     WebSourceRead,
 )
+from app.services.coverage import material_coverage
 from app.services.deletion import (
     DeletionConflict,
     impact_preview,
     soft_delete_material,
 )
-from app.services.uploads import UploadRejected, ingest_pptx
+from app.services.uploads import UploadRejected, ingest_document
 
 router = APIRouter()
 
@@ -97,7 +99,7 @@ def upload_material(
 ) -> UploadMaterialResponse:
     ensure_course(db, course_id)
     try:
-        material, job = ingest_pptx(
+        material, job = ingest_document(
             db, course_id=course_id, source=file.file,
             filename=file.filename or "upload", lecture_title=lecture_title,
             topic_title=topic_title, media_type=file.content_type,
@@ -135,6 +137,12 @@ def list_material_pages(material_id: str, db: Session = Depends(get_db)) -> list
             .order_by(MaterialPage.page_number)
         ).all()
     )
+
+
+@router.get("/materials/{material_id}/coverage", response_model=CoverageRead)
+def get_material_coverage(material_id: str, db: Session = Depends(get_db)) -> dict:
+    ensure_material(db, material_id)
+    return material_coverage(db, material_id)
 
 
 

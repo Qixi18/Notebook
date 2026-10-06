@@ -56,6 +56,32 @@ export type Page = {
   raw_text: string
   parse_status: string
   warning: string | null
+  location_type: string
+  location_label: string | null
+  stable_location_key: string | null
+  extraction_method: string
+  confidence: number | null
+}
+
+export type CoverageLocation = {
+  page_id: string
+  page_number: number
+  location_type: string
+  location_label: string
+  stable_location_key: string | null
+  status: 'cited' | 'review'
+  citation_count: number
+  note_ids: string[]
+  note_titles: string[]
+  warning: string | null
+}
+
+export type Coverage = {
+  material_id: string
+  total_locations: number
+  cited_locations: number
+  review_locations: number
+  locations: CoverageLocation[]
 }
 
 export type UploadResponse = {
@@ -125,6 +151,9 @@ export type NoteSourceRef = {
   quote: string
   material_id: string
   page_number: number
+  location_type?: string
+  location_label?: string | null
+  status?: string
 }
 
 export type KnowledgeNode = {

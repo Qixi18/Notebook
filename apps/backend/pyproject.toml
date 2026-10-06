@@ -12,6 +12,8 @@ dependencies = [
     "sqlalchemy>=2.0.36",
     "uvicorn[standard]>=0.34.0",
     "alembic>=1.20.0",
+    "pypdf>=6.19.0",
+    "python-docx>=1.2.0",
 ]
 
 [dependency-groups]

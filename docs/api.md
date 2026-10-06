@@ -1,4 +1,4 @@
-# 阶段一 API 契约
+# API 契约
 
 现有 `/api/v1` 地址保持不变。路由按 `courses.py`、`materials.py`、`jobs.py`、`knowledge.py`、`notes.py`、`assistant.py`、`config.py` 拆分，`routes.py` 负责汇总。输入和输出模型在 `app/schemas/` 按域声明，`app/schemas/api.py` 保留兼容导出。
 
@@ -16,3 +16,14 @@
 资料、笔记、任务等独立 ID 接口会校验所属课程仍有效；跨课程资料筛选不能用于另一课程答疑。答疑未传 `material_id` 时表示整门课程。当前对话仍为单轮，会话持久化留待阶段三。
 
 `GET /web-search/status` 继续兼容旧前端字段，但 Key 存在时状态是 `configured_untested`，不代表认证或搜索已成功。调用模型、联网和 Embedding 的实际结果需单独记录，不以配置状态替代联调验收。
+
+## 阶段二解析与证据接口
+
+| 能力 | 接口 | 行为 |
+|---|---|---|
+| 多格式上传 | `POST /courses/{course_id}/materials` | 接受 `.pptx`、`.pdf`、`.docx`；扩展名和容器结构都会校验，解析仍由本地持久化任务异步执行 |
+| 资料页面位置 | `GET /materials/{material_id}/pages` | 返回 `location_type`、`location_label`、`stable_location_key`、`extraction_method`、`confidence` 和告警；旧 `page_number` 字段继续保留 |
+| 资料来源覆盖 | `GET /materials/{material_id}/coverage` | 返回资料位置总数、已被有效来源引用的位置数、待检查位置数、位置明细和关联笔记 |
+| 笔记来源定位 | `GET /notes/{note_id}/sources`、`GET /sources/{source_ref_id}` | 返回课件位置、来源状态和目标标签；来源状态不是 `active` 时，前端显示待核对提示 |
+
+扫描型 PDF 没有文字层时只记录 OCR 候选和待检查告警，不生成伪造的文本或来源。OCR 是独立的可选适配器，受 `NOTEBOOK_OCR_ENABLED`、`NOTEBOOK_OCR_MAX_PAGES` 和 `NOTEBOOK_OCR_LANGUAGE` 控制。

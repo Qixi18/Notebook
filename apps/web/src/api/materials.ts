@@ -1,4 +1,4 @@
-import type { DeletionPreview, Job, Material, Page, UploadResponse, WebSource } from '../types'
+import type { Coverage, DeletionPreview, Job, Material, Page, UploadResponse, WebSource } from '../types'
 import { request } from './http'
 
 export const materialApi = {
@@ -23,4 +23,5 @@ export const materialApi = {
   listMaterialWebSources: (materialId: string) => request<WebSource[]>(`/api/v1/materials/${materialId}/web-sources`),
   retryMaterial: (materialId: string) => request<Job>(`/api/v1/materials/${materialId}/retry`, { method: 'POST' }),
   listPages: (materialId: string) => request<Page[]>(`/api/v1/materials/${materialId}/pages`),
+  getCoverage: (materialId: string) => request<Coverage>(`/api/v1/materials/${materialId}/coverage`),
 }

@@ -5,6 +5,10 @@ from typing import TypedDict
 
 from pptx import Presentation
 
+from app.parsers.base import PARSER_VERSION, ParsedDocument
+from app.parsers.base import ParsedBlock as DocumentBlock
+from app.parsers.base import ParsedPage as DocumentPage
+
 
 class ParsedBlock(TypedDict):
     block_type: str
@@ -12,6 +16,11 @@ class ParsedBlock(TypedDict):
     position: int
     font_size: float | None
     is_bold: bool
+    object_id: str | None
+    location_label: str
+    extraction_method: str
+    confidence: float
+    warning: str | None
 
 
 class ParsedPage(TypedDict):
@@ -20,6 +29,11 @@ class ParsedPage(TypedDict):
     raw_text: str
     warning: str | None
     blocks: list[ParsedBlock]
+    location_type: str
+    location_label: str
+    stable_location_key: str
+    extraction_method: str
+    confidence: float
 
 
 def _shape_font_size(shape: object) -> float | None:
@@ -44,35 +58,80 @@ def _shape_is_bold(shape: object) -> bool:
 
 
 def parse_pptx(path: Path) -> list[ParsedPage]:
+    return [_as_legacy_page(page) for page in parse_pptx_document(path).pages]
+
+
+def parse_pptx_document(path: Path) -> ParsedDocument:
     presentation = Presentation(path)
-    pages: list[ParsedPage] = []
+    pages: list[DocumentPage] = []
+    document_warnings: list[str] = []
 
     for page_number, slide in enumerate(presentation.slides, start=1):
-        blocks: list[ParsedBlock] = []
+        blocks: list[DocumentBlock] = []
         for position, shape in enumerate(slide.shapes):
             text = getattr(shape, "text", "")
+            block_type = "title" if position == 0 else "text"
+            warning = None
+            if getattr(shape, "has_table", False):
+                block_type = "table"
+                rows = [" | ".join(cell.text.strip() for cell in row.cells) for row in shape.table.rows]
+                text = "\n".join(row for row in rows if row.strip())
+            elif getattr(shape, "shape_type", None) is not None and not isinstance(text, str):
+                warning = "对象未提取为文本"
             if not isinstance(text, str) or not text.strip():
                 continue
             cleaned = text.strip()
             blocks.append(
-                {
-                    "block_type": "title" if position == 0 else "text",
-                    "content": cleaned,
-                    "position": position,
-                    "font_size": _shape_font_size(shape),
-                    "is_bold": _shape_is_bold(shape),
-                }
+                DocumentBlock(block_type=block_type, content=cleaned, position=position,
+                              object_id=str(getattr(shape, "shape_id", position)),
+                              location_label=f"第 {page_number} 页 · 对象 {position + 1}",
+                              font_size=_shape_font_size(shape), is_bold=_shape_is_bold(shape),
+                              extraction_method="table_parse" if block_type == "table" else "native_text",
+                              confidence=1.0, warning=warning)
             )
 
-        raw_text = "\n\n".join(block["content"] for block in blocks)
+        raw_text = "\n\n".join(block.content for block in blocks)
         pages.append(
-            {
-                "page_number": page_number,
-                "title": blocks[0]["content"][:500] if blocks else None,
-                "raw_text": raw_text,
-                "warning": "本页没有识别到文本内容" if not blocks else None,
-                "blocks": blocks,
-            }
+            DocumentPage(page_number=page_number,
+                         title=blocks[0].content[:500] if blocks else None,
+                         raw_text=raw_text, location_type="page",
+                         location_label=f"第 {page_number} 页",
+                         stable_location_key=f"slide:{page_number}",
+                         warning="本页没有识别到文本内容，建议按需 OCR" if not blocks else None,
+                         extraction_method="native_text", confidence=1.0,
+                         blocks=blocks)
         )
+        if not blocks:
+            document_warnings.append(f"第 {page_number} 页没有识别到文本")
 
-    return pages
+    return ParsedDocument(format="pptx", parser_version=PARSER_VERSION, pages=pages,
+                          warnings=document_warnings)
+
+
+def _as_legacy_page(page: DocumentPage) -> ParsedPage:
+    return {
+        "page_number": page.page_number,
+        "title": page.title,
+        "raw_text": page.raw_text,
+        "warning": page.warning,
+        "blocks": [
+            {
+                "block_type": block.block_type,
+                "content": block.content,
+                "position": block.position,
+                "font_size": block.font_size,
+                "is_bold": block.is_bold,
+                "object_id": block.object_id,
+                "location_label": block.location_label or "",
+                "extraction_method": block.extraction_method,
+                "confidence": block.confidence or 1.0,
+                "warning": block.warning,
+            }
+            for block in page.blocks
+        ],
+        "location_type": page.location_type,
+        "location_label": page.location_label or "",
+        "stable_location_key": page.stable_location_key,
+        "extraction_method": page.extraction_method,
+        "confidence": page.confidence or 1.0,
+    }

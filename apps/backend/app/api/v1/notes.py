@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.v1.shared import ensure_course, ensure_note
+from app.api.v1.shared import ensure_course, ensure_material, ensure_note
 from app.db.database import get_db
 from app.db.models import (
     Note,
@@ -22,6 +22,22 @@ from app.schemas.api import (
 )
 
 router = APIRouter()
+
+
+def _source_ref_read(source_ref: SourceRef) -> SourceRefRead:
+    page = source_ref.page_block.page
+    return SourceRefRead(
+        id=source_ref.id,
+        page_block_id=source_ref.page_block_id,
+        source_type=source_ref.source_type,
+        quote=source_ref.quote,
+        material_id=page.material_id,
+        page_number=page.page_number,
+        location_type=page.location_type,
+        location_label=page.location_label or source_ref.target_label,
+        status=source_ref.status,
+        target_label=source_ref.target_label,
+    )
 
 
 @router.get("/courses/{course_id}/notes", response_model=list[NoteRead])
@@ -65,17 +81,20 @@ def get_note_sources(note_id: str, db: Session = Depends(get_db)) -> list[Source
     if note is None:
         raise HTTPException(status_code=404, detail="笔记不存在")
     ensure_course(db, note.course_id)
-    return [
-        SourceRefRead(
-            id=source_ref.id,
-            page_block_id=source_ref.page_block_id,
-            source_type=source_ref.source_type,
-            quote=source_ref.quote,
-            material_id=source_ref.page_block.page.material_id,
-            page_number=source_ref.page_block.page.page_number,
-        )
-        for source_ref in note.source_refs
-    ]
+    return [_source_ref_read(source_ref) for source_ref in note.source_refs]
+
+
+@router.get("/sources/{source_ref_id}", response_model=SourceRefRead)
+def get_source(source_ref_id: str, db: Session = Depends(get_db)) -> SourceRefRead:
+    source_ref = db.scalar(
+        select(SourceRef)
+        .where(SourceRef.id == source_ref_id)
+        .options(selectinload(SourceRef.page_block).selectinload(PageBlock.page))
+    )
+    if source_ref is None:
+        raise HTTPException(status_code=404, detail="来源不存在")
+    ensure_material(db, source_ref.page_block.page.material_id)
+    return _source_ref_read(source_ref)
 
 
 

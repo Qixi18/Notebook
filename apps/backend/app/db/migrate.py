@@ -25,6 +25,12 @@ PHASE_ONE_COLUMNS = {
         "finished_at", "heartbeat_at",
     },
 }
+PHASE_TWO_COLUMNS = {
+    "materials": {"parser_version", "document_warning"},
+    "material_pages": {"location_type", "location_label", "stable_location_key", "extraction_method", "confidence"},
+    "page_blocks": {"object_id", "location_label", "extraction_method", "confidence", "warning"},
+    "source_refs": {"status", "target_label", "parser_version"},
+}
 LEGACY_COLUMNS = {
     "materials": {"topic_title": "VARCHAR(200)"},
     "processing_jobs": {
@@ -48,7 +54,7 @@ def _prepare_legacy_schema() -> None:
     found = set(inspect(engine).get_table_names())
     if not found or found == {"alembic_version"}:
         return
-    required = {table.name for table in Base.metadata.sorted_tables} - {"web_sources"}
+    required = {table.name for table in Base.metadata.sorted_tables} - {"web_sources", "note_source_mappings"}
     if not required.issubset(found):
         raise RuntimeError(f"Unsupported legacy schema; missing tables: {sorted(required - found)}")
     with engine.begin() as connection:
@@ -62,7 +68,7 @@ def _prepare_legacy_schema() -> None:
         inspector = inspect(connection)
         for table in Base.metadata.sorted_tables:
             existing = {column["name"] for column in inspector.get_columns(table.name)}
-            baseline = {column.name for column in table.columns} - PHASE_ONE_COLUMNS.get(table.name, set())
+            baseline = {column.name for column in table.columns} - PHASE_ONE_COLUMNS.get(table.name, set()) - PHASE_TWO_COLUMNS.get(table.name, set())
             if not baseline.issubset(existing):
                 raise RuntimeError(f"Unsupported legacy columns in {table.name}: {sorted(baseline - existing)}")
 
