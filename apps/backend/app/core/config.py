@@ -26,6 +26,8 @@ class Settings:
     deepseek_base_url: str
     deepseek_model: str
     deepseek_timeout_seconds: float
+    tavily_api_key: str | None
+    web_search_timeout_seconds: float
     embedding_base_url: str | None
     embedding_api_key: str | None
     embedding_model: str | None
@@ -55,6 +57,8 @@ settings = Settings(
     deepseek_base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
     deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
     deepseek_timeout_seconds=float(os.getenv("DEEPSEEK_TIMEOUT_SECONDS", "60")),
+    tavily_api_key=os.getenv("TAVILY_API_KEY") or None,
+    web_search_timeout_seconds=float(os.getenv("WEB_SEARCH_TIMEOUT_SECONDS", "20")),
     embedding_base_url=os.getenv("EMBEDDING_BASE_URL") or None,
     embedding_api_key=os.getenv("EMBEDDING_API_KEY") or None,
     embedding_model=os.getenv("EMBEDDING_MODEL") or None,

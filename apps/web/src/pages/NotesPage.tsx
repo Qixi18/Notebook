@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
 import remarkMath from 'remark-math'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { api } from '../api'
 import { EmptyState } from '../components/EmptyState'
@@ -15,6 +15,7 @@ export function NotesPage() {
     course,
     courseId,
     courseContentLoading,
+    graph,
     notes,
     selectedNote,
     setSelectedNoteId,
@@ -24,6 +25,10 @@ export function NotesPage() {
     setEditingNote,
     saveNote,
     noteSaving,
+    noteDirty,
+    reloadNote,
+    error,
+    setError,
     materials,
     setSelectedMaterialId,
     setSelectedPageNumber,
@@ -34,20 +39,26 @@ export function NotesPage() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string>()
   const [previewRevision, setPreviewRevision] = useState<NoteRevision>()
+  const [lectureFilter, setLectureFilter] = useState('all')
+  const [evidenceOpen, setEvidenceOpen] = useState(false)
+  const [webSources, setWebSources] = useState<import('../types').WebSource[]>([])
+  const filteredNotes = notes.filter((note) => lectureFilter === 'all' || graph.nodes.find((node) => node.id === note.knowledge_node_id)?.sources.some((source) => source.material_id === lectureFilter))
 
   useEffect(() => {
     setPreviewRevision(undefined)
     setSources([])
     setRevisions([])
+    setWebSources([])
     setDetailError(undefined)
     if (!selectedNote) return
     let active = true
     setDetailLoading(true)
-    void Promise.all([api.getNoteSources(selectedNote.id), api.getNoteRevisions(selectedNote.id)])
-      .then(([nextSources, nextRevisions]) => {
+    void Promise.all([api.getNoteSources(selectedNote.id), api.getNoteRevisions(selectedNote.id), api.getNoteWebSources(selectedNote.id)])
+      .then(([nextSources, nextRevisions, nextWebSources]) => {
         if (!active) return
         setSources(nextSources)
         setRevisions(nextRevisions)
+        setWebSources(nextWebSources)
       })
       .catch((cause: unknown) => {
         if (active) setDetailError(cause instanceof Error ? cause.message : '笔记来源读取失败')
@@ -75,31 +86,32 @@ export function NotesPage() {
       </header>
 
       {courseContentLoading ? <div className="page-loading" role="status">正在读取这门课程的笔记…</div> : notes.length === 0 ? (
-        <EmptyState icon="▤" title="这门课程还没有笔记" description={materials.length ? '课件解析完成后，系统会从课程页面整理知识点笔记。' : '先上传并解析一份课程资料，再回来查看整理结果。'} />
+        <EmptyState icon="▤" title="这门课程还没有笔记" description={materials.length ? '课件解析完成后，系统会从课程页面整理知识点笔记。' : '先上传并解析一份课程资料，再回来查看整理结果。'} action={courseId ? <Link className="secondary-button link-button" to={featurePath(courseId, 'materials')}>前往课程资料</Link> : undefined} />
       ) : (
         <section className="notes-workspace">
           <aside className="notes-index-panel" aria-label="笔记目录">
-            <div className="panel-heading"><strong>知识点目录</strong><span>{notes.length}</span></div>
+            <div className="panel-heading"><strong>知识点目录</strong><span>{filteredNotes.length}/{notes.length}</span></div>
+            <label className="notes-lecture-filter">讲次筛选<select value={lectureFilter} onChange={(event) => setLectureFilter(event.target.value)}><option value="all">全部讲次</option>{materials.map((material) => <option key={material.id} value={material.id}>{material.lecture_title}</option>)}</select></label>
             <div className="notes-index-list">
-              {notes.map((note) => (
+              {filteredNotes.map((note) => (
                 <button
                   className={`notes-index-item ${selectedNote?.id === note.id ? 'notes-index-item-active' : ''}`}
                   key={note.id}
                   aria-current={selectedNote?.id === note.id ? 'true' : undefined}
-                  onClick={() => setSelectedNoteId(note.id)}
+                  onClick={() => { if (noteDirty && !window.confirm('笔记有尚未保存的修改。切换后这些内容会丢失，仍要继续吗？')) return; setSelectedNoteId(note.id) }}
                 >
                   <strong>{note.title}</strong>
-                  <small>{note.user_locked ? '已保护的用户版本' : 'AI 初稿'} · v{note.revision_number}</small>
+                  <small>{note.user_locked ? '已保护的用户版本' : note.content_origin === 'ai_web_augmented' ? '含网络补充来源' : 'AI 初稿'} · v{note.revision_number}</small>
                 </button>
               ))}
             </div>
           </aside>
 
-          <article className="note-detail-panel">
+          <div className="note-detail-panel">
             {selectedNote ? (
               <>
                 <div className="note-detail-heading">
-                  <div><span className="eyebrow">{previewRevision ? `历史版本 · v${previewRevision.revision_number}` : selectedNote.content_origin === 'user' ? '用户版本' : '课程整理'}</span><h2>{selectedNote.title}</h2></div>
+                  <div><span className="eyebrow">{previewRevision ? `历史版本 · v${previewRevision.revision_number}` : selectedNote.content_origin === 'user' ? '用户版本' : selectedNote.content_origin === 'ai_web_augmented' ? '课程整理 · 含独立标注的网络来源' : '课程整理'}</span><h2>{selectedNote.title}</h2></div>
                   {!editingNote && !previewRevision && <button className="secondary-button" onClick={() => setEditingNote(true)}>编辑笔记</button>}
                   {previewRevision && <button className="secondary-button" onClick={() => setPreviewRevision(undefined)}>返回当前版本</button>}
                 </div>
@@ -107,7 +119,7 @@ export function NotesPage() {
                   <>
                     <textarea className="note-editor-textarea" value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} aria-label="笔记 Markdown 内容" />
                     <div className="note-editor-footer">
-                      <span>保存会生成新版本，并保护你的正文不被后续自动整理覆盖。</span>
+                      <span role="status">{noteSaving ? '正在保存…' : noteDirty ? '有尚未保存的修改' : '内容已保存'}。保存会生成新版本并保护正文。</span>
                       <div>
                         <button className="text-button" onClick={() => { setNoteDraft(selectedNote.content_markdown); setEditingNote(false) }}>取消</button>
                         <button className="primary-button" onClick={() => void saveNote()} disabled={noteSaving || !noteDraft.trim()}>{noteSaving ? '保存中…' : '保存并保护'}</button>
@@ -116,34 +128,18 @@ export function NotesPage() {
                   </>
                 ) : <div className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{displayedContent || '此版本没有正文内容。'}</ReactMarkdown></div>}
 
-                <section className="note-evidence-grid" aria-label="笔记来源和修订历史">
-                  {detailError && <p className="evidence-error" role="alert">来源或版本历史读取失败：{detailError}</p>}
-                  <div className="note-evidence-panel">
-                    <div className="panel-heading"><strong>课件来源</strong><span>{sources.length}</span></div>
-                    {detailLoading ? <div className="inline-empty" role="status">正在读取来源…</div> : sources.length ? (
-                      <div className="source-card-list">{sources.map((source) => (
-                        <SourceCard key={source.id} title={materials.find((item) => item.id === source.material_id)?.lecture_title ?? '课程资料'} pageNumber={source.page_number} quote={source.quote} onOpen={() => openSource(source)} />
-                      ))}</div>
-                    ) : <p className="evidence-empty">{detailError ? '来源暂时无法读取。' : '这条笔记当前没有可追溯的课件片段。'}</p>}
-                  </div>
+                {error?.includes('笔记已在其他操作中更新') && <div className="note-conflict-panel" role="alert"><strong>检测到版本冲突</strong><p>可以载入最新版本重新编辑，或保留当前草稿并自行比较。载入最新版本会替换当前编辑内容。</p><button className="secondary-button" onClick={() => void reloadNote().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : '最新版本读取失败'))}>载入最新版本</button><button className="text-button" onClick={() => setError(undefined)}>保留当前草稿</button></div>}
 
-                  <div className="note-evidence-panel">
-                    <div className="panel-heading"><strong>修订历史</strong><span>{revisions.length} 个版本</span></div>
-                    {detailLoading ? <div className="inline-empty" role="status">正在读取版本…</div> : revisions.length ? (
-                      <div className="revision-list">
-                        {revisions.slice().reverse().map((revision) => (
-                          <button key={revision.id} className={`revision-item ${previewRevision?.id === revision.id ? 'revision-item-active' : ''}`} onClick={() => { setEditingNote(false); setPreviewRevision(revision.revision_number === selectedNote.revision_number ? undefined : revision) }}>
-                            <span><strong>v{revision.revision_number}{revision.revision_number === selectedNote.revision_number ? ' · 当前' : ''}</strong><small>{revision.user_locked ? '用户保存' : revision.content_origin === 'ai' ? 'AI 整理' : '课程整理'}</small></span>
-                            <time dateTime={revision.created_at}>{new Date(revision.created_at).toLocaleString('zh-CN')}</time>
-                          </button>
-                        ))}
-                      </div>
-                    ) : <p className="evidence-empty">暂无可展示的历史版本。</p>}
-                  </div>
-                </section>
               </>
             ) : <div className="page-loading" role="status">正在读取笔记…</div>}
-          </article>
+          </div>
+          {selectedNote && <button className="note-evidence-toggle" aria-expanded={evidenceOpen} onClick={() => setEvidenceOpen((open) => !open)}>{evidenceOpen ? '收起来源与历史' : `查看来源与历史 · ${sources.length} 条来源 / ${revisions.length} 个版本`}</button>}
+          {selectedNote && <aside className={`note-evidence-sidebar ${evidenceOpen ? 'note-evidence-sidebar-open' : ''}`} aria-label="笔记来源与修订历史">
+            {detailError && <p className="evidence-error" role="alert">来源或版本历史读取失败：{detailError}</p>}
+            <div className="note-evidence-panel"><div className="panel-heading"><strong>课件来源</strong><span>{sources.length}</span></div>{detailLoading ? <div className="inline-empty" role="status">正在读取来源…</div> : sources.length ? <div className="source-card-list">{sources.map((source) => <SourceCard key={source.id} title={materials.find((item) => item.id === source.material_id)?.lecture_title ?? '课程资料'} pageNumber={source.page_number} quote={source.quote} onOpen={() => openSource(source)} />)}</div> : <p className="evidence-empty">{detailError ? '来源暂时无法读取。' : '这条笔记当前没有可追溯的课件片段。'}</p>}</div>
+            <div className="note-evidence-panel"><div className="panel-heading"><strong>网络补充来源</strong><span>{webSources.length}</span></div>{webSources.length ? <div className="source-card-list">{webSources.map((source) => <a className="source-card" key={source.id} href={source.url} target="_blank" rel="noreferrer"><span className="source-card-icon">↗</span><span className="source-card-body"><small className="source-card-meta">{source.site_name} · 检索于 {new Date(source.retrieved_at).toLocaleDateString('zh-CN')}</small><strong>{source.title}</strong><small>{source.snippet}</small></span></a>)}</div> : <p className="evidence-empty">尚无关联网络来源；检索关闭或没有达到链接格式与相关度要求的结果时，这里会保持为空。</p>}</div>
+            <div className="note-evidence-panel"><div className="panel-heading"><strong>修订历史</strong><span>{revisions.length} 个版本</span></div>{detailLoading ? <div className="inline-empty" role="status">正在读取版本…</div> : revisions.length ? <div className="revision-list">{revisions.slice().reverse().map((revision) => <button key={revision.id} className={`revision-item ${previewRevision?.id === revision.id ? 'revision-item-active' : ''}`} onClick={() => { if (noteDirty && !window.confirm('笔记有未保存的修改。切换历史版本会结束编辑，仍要继续吗？')) return; setEditingNote(false); setPreviewRevision(revision.revision_number === selectedNote.revision_number ? undefined : revision) }}><span><strong>v{revision.revision_number}{revision.revision_number === selectedNote.revision_number ? ' · 当前' : ''}</strong><small>{revision.user_locked ? '用户保存' : revision.content_origin === 'ai_web_augmented' ? '含网络补充来源' : revision.content_origin === 'ai' ? 'AI 整理' : '课程整理'}</small></span><time dateTime={revision.created_at}>{new Date(revision.created_at).toLocaleString('zh-CN')}</time></button>)}</div> : <p className="evidence-empty">暂无可展示的历史版本。</p>}</div>
+          </aside>}
         </section>
       )}
     </div>

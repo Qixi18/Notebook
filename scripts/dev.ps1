@@ -15,7 +15,23 @@ if (Test-Path (Join-Path $repo '.env')) {
 }
 
 $backendProcess = $null
+$workerProcess = $null
 try {
+    Write-Host 'Checking database migrations and starting material worker ...'
+    Push-Location $backendDir
+    try {
+        uv run python -c 'from app.db.migrate import migrate_database; migrate_database()'
+        if ($LASTEXITCODE -ne 0) { throw 'Database migration failed; services were not started.' }
+    } finally {
+        Pop-Location
+    }
+    $workerProcess = Start-Process `
+        -FilePath (Get-Command uv).Source `
+        -ArgumentList @('run', 'python', '-m', 'app.workers.runner') `
+        -WorkingDirectory $backendDir `
+        -WindowStyle Hidden `
+        -PassThru
+
     Write-Host "Starting NoteBuddy backend on $backendUrl ..."
     $backendProcess = Start-Process `
         -FilePath (Get-Command uv).Source `
@@ -55,5 +71,9 @@ try {
     if ($backendProcess -and -not $backendProcess.HasExited) {
         Stop-Process -Id $backendProcess.Id -Force
         Write-Host 'Backend process stopped.'
+    }
+    if ($workerProcess -and -not $workerProcess.HasExited) {
+        Stop-Process -Id $workerProcess.Id -Force
+        Write-Host 'Material worker stopped.'
     }
 }

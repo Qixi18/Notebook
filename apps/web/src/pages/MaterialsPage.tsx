@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { api } from '../api'
 import { EmptyState } from '../components/EmptyState'
 import { ProcessingStatus } from '../components/ProcessingStatus'
 import { useWorkspace } from '../components/AppLayout'
@@ -18,18 +19,60 @@ export function MaterialsPage() {
     job,
     busy,
     uploadMaterial,
+    retryMaterial,
+    refreshCurrentMaterials,
   } = useWorkspace()
   const [file, setFile] = useState<File>()
   const [lectureTitle, setLectureTitle] = useState('第 1 讲')
+  const [topicTitle, setTopicTitle] = useState('')
+  const [allowDuplicate, setAllowDuplicate] = useState(false)
+  const [webSources, setWebSources] = useState<import('../types').WebSource[]>([])
+  const [deletedMaterials, setDeletedMaterials] = useState<import('../types').Material[]>([])
+  const [materialActionError, setMaterialActionError] = useState<string>()
+
+  useEffect(() => {
+    let active = true
+    if (!course) return () => { active = false }
+    void api.listDeletedMaterials(course.id).then((items) => { if (active) setDeletedMaterials(items) }).catch(() => { if (active) setDeletedMaterials([]) })
+    return () => { active = false }
+  }, [course?.id, materials])
+
+  async function deleteMaterial(id: string) {
+    try {
+      const impact = await api.previewMaterialDeletion(id)
+      if (impact.active_jobs) throw new Error('资料仍在处理中，请完成后再移除。')
+      if (!window.confirm(`移除这份资料？将隐藏 ${impact.pages} 个页面和 ${impact.source_refs} 条来源；${impact.user_notes_protected} 条用户笔记受保护。操作前会备份，之后可恢复。`)) return
+      await api.deleteMaterial(id)
+      await refreshCurrentMaterials()
+      setMaterialActionError(undefined)
+    } catch (cause) { setMaterialActionError(cause instanceof Error ? cause.message : '资料移除失败') }
+  }
+
+  async function restoreMaterial(id: string) {
+    try { await api.restoreMaterial(id); await refreshCurrentMaterials(); setMaterialActionError(undefined) }
+    catch (cause) { setMaterialActionError(cause instanceof Error ? cause.message : '资料恢复失败') }
+  }
 
   async function handleUpload(event: FormEvent) {
     event.preventDefault()
     if (!file) return
-    await uploadMaterial(file, lectureTitle)
-    setFile(undefined)
+    try {
+      await uploadMaterial(file, lectureTitle, topicTitle, allowDuplicate)
+      setFile(undefined)
+      setAllowDuplicate(false)
+    } catch {
+      // The workspace displays the API error; keep the file for a corrected retry.
+    }
   }
 
   const selectedPage = pages.find((page) => page.page_number === selectedPageNumber)
+
+  useEffect(() => {
+    if (!selectedMaterialId) { setWebSources([]); return }
+    let active = true
+    void api.listMaterialWebSources(selectedMaterialId).then((items) => { if (active) setWebSources(items) }).catch(() => { if (active) setWebSources([]) })
+    return () => { active = false }
+  }, [selectedMaterialId])
 
   return (
     <div className="feature-page page-enter">
@@ -41,13 +84,17 @@ export function MaterialsPage() {
       <form className="material-upload-card" onSubmit={(event) => void handleUpload(event)}>
         <div className="upload-card-heading"><span className="upload-card-icon">＋</span><div><h2>上传一份课程资料</h2><p>当前版本支持 PPTX，单文件上限 50 MB。</p></div></div>
         <div className="material-upload-fields">
+          <label>章节 / 主题（可选）<input value={topicTitle} onChange={(event) => setTopicTitle(event.target.value)} maxLength={200} placeholder="例如：第一章 · 软件生命周期" /></label>
           <label>讲次名称<input value={lectureTitle} onChange={(event) => setLectureTitle(event.target.value)} maxLength={200} placeholder="例如：第 1 讲 · 软件生命周期" /></label>
           <label className="material-file-field">选择课件<input type="file" accept=".pptx" onChange={(event) => setFile(event.target.files?.[0])} /></label>
+          <label><input type="checkbox" checked={allowDuplicate} onChange={(event) => setAllowDuplicate(event.target.checked)} />相同文件作为新讲次导入</label>
           <button className="primary-button" type="submit" disabled={!file || busy}>{busy ? '上传中…' : '上传并解析'}</button>
         </div>
       </form>
 
       <ProcessingStatus job={job?.material_id === selectedMaterialId ? job : undefined} material={materials.find((item) => item.id === selectedMaterialId)} />
+      {materialActionError && <p className="form-error" role="alert">{materialActionError}</p>}
+      {deletedMaterials.length > 0 && <section aria-label="可恢复资料"><h2>可恢复的资料</h2>{deletedMaterials.map((material) => <div key={material.id}><span>{material.lecture_title} · {material.original_filename}</span><button className="text-button" onClick={() => void restoreMaterial(material.id)}>恢复资料</button></div>)}</section>}
 
       <section className="materials-list-section">
         <div className="section-heading-row"><div><span className="eyebrow">当前课程</span><h2>已上传资料</h2></div></div>
@@ -57,11 +104,15 @@ export function MaterialsPage() {
           <div className="materials-browser">
             <div className="materials-list" aria-label="课程资料列表">
               {materials.map((material) => (
-                <button className={`material-list-item ${selectedMaterialId === material.id ? 'material-list-item-active' : ''}`} key={material.id} onClick={() => setSelectedMaterialId(material.id)}>
-                  <span className="material-list-icon">▱</span>
-                  <span className="material-list-copy"><strong>{material.lecture_title}</strong><small>{material.original_filename} · {material.page_count} 页</small></span>
-                  <span className={`status-pill status-pill-${material.status}`}>{statusLabels[material.status] ?? material.status}</span>
-                </button>
+                <div className="material-row" key={material.id}>
+                  <button className={`material-list-item ${selectedMaterialId === material.id ? 'material-list-item-active' : ''}`} onClick={() => setSelectedMaterialId(material.id)}>
+                    <span className="material-list-icon">▱</span>
+                    <span className="material-list-copy"><strong>{material.lecture_title}</strong><small>{material.topic_title ? `${material.topic_title} · ` : ''}{material.original_filename} · {material.page_count} 页</small><time dateTime={material.created_at}>上传于 {new Date(material.created_at).toLocaleString('zh-CN')}</time></span>
+                    <span className={`status-pill status-pill-${material.status}`}>{statusLabels[material.status] ?? material.status}</span>
+                  </button>
+                  {material.status === 'failed' && <button className="material-retry-action" onClick={() => void retryMaterial(material.id)}>重试解析</button>}
+                  {(material.status === 'completed' || material.status === 'failed') && <button className="text-button" onClick={() => void deleteMaterial(material.id)}>移除资料</button>}
+                </div>
               ))}
             </div>
 
@@ -82,6 +133,7 @@ export function MaterialsPage() {
                 </div>
               )}
               {selectedPage && <article className="material-page-detail"><span className="eyebrow">第 {selectedPage.page_number} 页</span><h3>{selectedPage.title || '未识别标题'}</h3><p>{selectedPage.raw_text || '本页没有可展示的文本。'}</p>{selectedPage.warning && <small className="form-error">{selectedPage.warning}</small>}</article>}
+              {selectedMaterialId && <section className="material-web-sources"><div className="panel-heading"><strong>联网补充来源</strong><span>{webSources.length}</span></div>{webSources.length ? <div className="source-card-list">{webSources.map((source) => <a className="source-card" key={source.id} href={source.url} target="_blank" rel="noreferrer"><span className="source-card-icon">↗</span><span className="source-card-body"><small className="source-card-meta">{source.site_name} · 检索于 {new Date(source.retrieved_at).toLocaleDateString('zh-CN')}</small><strong>{source.title}</strong><small>{source.snippet}</small></span></a>)}</div> : <p className="evidence-empty">此资料没有已保存的联网补充来源。搜索未配置或未找到可靠结果时不会显示虚构来源。</p>}</section>}
             </div>
           </div>
         )}

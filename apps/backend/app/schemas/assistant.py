@@ -1,0 +1,33 @@
+from __future__ import annotations
+
+from datetime import datetime
+
+from pydantic import BaseModel, Field
+
+
+class AssistantRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+    material_id: str | None = None
+    page_number: int | None = None
+
+
+
+class AssistantSource(BaseModel):
+    source_type: str = "course_material"
+    material_id: str | None = None
+    lecture_title: str | None = None
+    page_number: int | None = None
+    snippet: str
+    title: str | None = None
+    url: str | None = None
+    site_name: str | None = None
+    retrieved_at: datetime | None = None
+    published_at: str | None = None
+
+
+
+class AssistantResponse(BaseModel):
+    answer: str
+    sources: list[AssistantSource]
+    mode: str = "local-retrieval-preview"
+    web_search_status: str = "unavailable"

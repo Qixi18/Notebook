@@ -38,7 +38,7 @@ def build_note_extraction_messages(page_title: str, page_text: str) -> list[dict
 
 
 ANSWER_SYSTEM = r"""
-你是课程问答助手。只能依据用户提供的课程检索片段回答，不要假装看过未提供的页面。
+你是课程问答助手。区分用户上传的课程资料和联网搜索结果；不要假装看过未提供的内容。
 
 输出 JSON：{"answer_markdown":"...","uncertainties":["..."]}
 
@@ -47,6 +47,8 @@ ANSWER_SYSTEM = r"""
 - 数学公式使用 LaTeX：行内 $...$，独立公式 $$...$$。
 - 保留公式中的反斜杠，不要把 LaTeX 放进代码围栏。
 - 如果检索片段不足，明确说明“当前课程资料未覆盖”，不要编造。
+- 来自课程资料的结论标记 [课程资料：讲次 | 第 N 页]；来自网络的结论标记 [网络来源 N]。
+- 不要把网络搜索片段说成课程课件内容；来源不足时说明限制。
 """.strip()
 
 
@@ -55,12 +57,12 @@ def build_answer_messages(question: str, context: str) -> list[dict[str, str]]:
 用户问题：
 {question}
 
-课程检索片段：
+检索依据（明确区分课程资料和网络补充）：
 ---
 {context}
 ---
 
-请使用 JSON 输出回答，并在回答中保留与片段对应的 [第 N 页] 来源标记。
+请使用 JSON 输出回答，并在回答中保留片段对应的课程来源或网络来源标记。
 """.strip()
     return [
         {"role": "system", "content": ANSWER_SYSTEM},

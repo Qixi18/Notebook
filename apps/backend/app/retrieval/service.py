@@ -69,7 +69,7 @@ def retrieve(
         .join(PageBlock, RetrievalChunk.page_block_id == PageBlock.id)
         .join(MaterialPage, PageBlock.page_id == MaterialPage.id)
         .join(Material, MaterialPage.material_id == Material.id)
-        .where(RetrievalChunk.course_id == course_id)
+        .where(RetrievalChunk.course_id == course_id, Material.deleted_at.is_(None))
     )
     if material_id:
         query = query.where(Material.id == material_id)

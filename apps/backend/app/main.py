@@ -6,17 +6,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.routes import router
-from app.core.config import settings
-from app.db.database import Base, engine
+from app.db.migrate import migrate_database
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    settings.data_dir.mkdir(parents=True, exist_ok=True)
-    settings.originals_dir.mkdir(parents=True, exist_ok=True)
-    settings.derived_dir.mkdir(parents=True, exist_ok=True)
-    settings.backups_dir.mkdir(parents=True, exist_ok=True)
-    Base.metadata.create_all(bind=engine)
+    migrate_database()
     yield
 
 

@@ -1,5 +1,5 @@
-import { createContext, useContext, type ReactNode } from 'react'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { createContext, useContext, useEffect, type ReactNode } from 'react'
+import { Outlet, useBlocker, useLocation, useNavigate } from 'react-router-dom'
 
 import type {
   AssistantResponse,
@@ -20,6 +20,7 @@ export type ChatMessage = {
   sources?: AssistantResponse['sources']
   mode?: string
   status?: 'idle' | 'thinking' | 'explaining' | 'error'
+  webSearchStatus?: 'unavailable' | 'failed' | 'no_results' | 'completed'
 }
 
 export type WorkspaceContextValue = {
@@ -46,16 +47,20 @@ export type WorkspaceContextValue = {
   busy: boolean
   assistantBusy: boolean
   noteSaving: boolean
+  noteDirty: boolean
+  reloadNote: () => Promise<void>
   error?: string
   setError: (message: string | undefined) => void
   createCourse: (name: string) => Promise<Course>
-  uploadMaterial: (file: File, lectureTitle: string) => Promise<void>
+  uploadMaterial: (file: File, lectureTitle: string, topicTitle?: string, allowDuplicate?: boolean) => Promise<void>
+  retryMaterial: (materialId: string) => Promise<void>
   saveNote: () => Promise<void>
   messages: ChatMessage[]
   question: string
   setQuestion: (value: string) => void
-  askQuestion: () => Promise<void>
+  askQuestion: (materialId?: string, pageNumber?: number) => Promise<void>
   refreshCourses: () => Promise<void>
+  refreshCurrentMaterials: () => Promise<void>
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
@@ -95,10 +100,24 @@ export function featurePath(courseId: string, feature: Feature): string {
 }
 
 export function AppLayout() {
-  const { courseId, course, courses, coursesLoading, error, setError } = useWorkspace()
+  const { courseId, course, courses, coursesLoading, error, setError, noteDirty } = useWorkspace()
   const navigate = useNavigate()
   const location = useLocation()
   const activeFeature = location.pathname.split('/')[3] as Feature | undefined
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => noteDirty && currentLocation.pathname !== nextLocation.pathname)
+
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return
+    if (window.confirm('笔记有尚未保存的修改。离开将丢失这些内容，仍要继续吗？')) blocker.proceed()
+    else blocker.reset()
+  }, [blocker])
+
+  useEffect(() => {
+    if (!noteDirty) return
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warnBeforeUnload)
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload)
+  }, [noteDirty])
 
   function openFeature(feature: Feature) {
     if (courseId) {

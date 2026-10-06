@@ -3,18 +3,21 @@ export type Course = {
   name: string
   description: string | null
   created_at: string
+  deleted_at?: string | null
 }
 
 export type Material = {
   id: string
   course_id: string
   lecture_title: string
+  topic_title: string | null
   original_filename: string
   media_type: string | null
   size_bytes: number
   status: string
   page_count: number
   created_at: string
+  deleted_at?: string | null
 }
 
 export type Job = {
@@ -24,8 +27,25 @@ export type Job = {
   status: string
   progress: number
   error_message: string | null
+  phase: string
+  web_search_status: string
   created_at: string
   updated_at: string
+  error_code?: string | null
+  attempt_count?: number
+}
+
+export type DeletionPreview = {
+  course_id: string
+  material_id: string | null
+  materials: number
+  pages: number
+  source_refs: number
+  knowledge_nodes_touched: number
+  user_notes_protected: number
+  original_bytes: number
+  active_jobs: number
+  action: string
 }
 
 export type Page = {
@@ -44,16 +64,35 @@ export type UploadResponse = {
 }
 
 export type AssistantSource = {
-  material_id: string
-  lecture_title: string
-  page_number: number
+  source_type: 'course_material' | 'web'
+  material_id?: string | null
+  lecture_title?: string | null
+  page_number?: number | null
   snippet: string
+  title?: string | null
+  url?: string | null
+  site_name?: string | null
+  retrieved_at?: string | null
+  published_at?: string | null
+}
+
+export type WebSource = {
+  id: string
+  title: string
+  url: string
+  site_name: string
+  snippet: string
+  search_query: string
+  score: number | null
+  published_at: string | null
+  retrieved_at: string
 }
 
 export type AssistantResponse = {
   answer: string
   sources: AssistantSource[]
   mode: string
+  web_search_status: 'unavailable' | 'failed' | 'no_results' | 'completed'
 }
 
 export type Note = {
@@ -94,6 +133,14 @@ export type KnowledgeNode = {
   name: string
   summary: string | null
   status: string
+  sources: KnowledgeNodeSource[]
+}
+
+export type KnowledgeNodeSource = {
+  material_id: string
+  lecture_title: string
+  topic_title?: string | null
+  page_number: number
 }
 
 export type KnowledgeEdge = {

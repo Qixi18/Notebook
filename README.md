@@ -7,12 +7,23 @@
 - `apps/web`：React + TypeScript + Vite 三栏学习工作区
 - `apps/backend`：FastAPI + SQLite 课程、资料、知识树、笔记版本和检索 API
 - 当前可完成：创建课程、上传 PPTX、逐页解析、页面来源引用、基础知识点提取、知识树、可编辑笔记、用户编辑保护和课程范围检索问答
-- 当前上传格式限制为 PPTX；PDF、DOCX 解析器已预留目录，尚未接入
+- 当前上传格式限制为 PPTX；PDF、DOCX 解析器属于后续阶段，尚未接入
 - Embedding 已提供 OpenAI-compatible 接口适配；未配置时使用本地关键词检索，配置后使用向量相似度混合检索
 - DeepSeek 已提供结构化 JSON 提取和 RAG 回答适配；未配置 `DEEPSEEK_API_KEY` 时自动使用本地保守降级
 - Electron 已建立安全桌面包装骨架，完整安装包和后端进程托管仍需下一阶段联调
+- 阶段一开发已接入 Alembic 迁移、数据库待处理任务与独立本地执行器、可恢复逻辑删除和基础数据检查点；配置状态仅表示配置/主动测试结果，不等于外部服务完整验收
 
 ### 本地启动
+
+推荐从仓库根目录启动，由脚本先检查数据库迁移，再启动同仓库的 API、资料执行器和前端：
+
+```powershell
+./scripts/dev.ps1
+```
+
+首次使用前分别在 `apps/backend` 执行 `uv sync`，在 `apps/web` 执行 `npm install`。手动分终端启动时，除 API 和前端外还必须在 `apps/backend` 运行 `uv run python -m app.workers.runner`，否则上传后的任务会保持等待处理。
+
+原有分终端方式如下，但需同时启动上述执行器：
 
 ```powershell
 cd apps/backend
@@ -46,7 +57,7 @@ EMBEDDING_MODEL=
 
 未配置 Embedding 时仍可使用关键词检索；要启用语义检索，需要同时填写三个 `EMBEDDING_*` 配置。笔记和回答以 Markdown 存储，数学公式使用 LaTeX，并由前端 KaTeX 渲染。
 
-详细架构见 [`docs/architecture.md`](docs/architecture.md)。
+详细架构见 [`docs/architecture.md`](docs/architecture.md)，迁移与恢复见 [`docs/migrations.md`](docs/migrations.md)，新增接口见 [`docs/api.md`](docs/api.md)。以下概念章节记录较早的产品构想；本地 Web 和页面式精灵教师是当前实施范围，Electron 桌面宠物尚非已交付功能。
 
 ## 项目名称 Notebuddy
 课程知识树 + 桌面答疑伙伴（工作代号）

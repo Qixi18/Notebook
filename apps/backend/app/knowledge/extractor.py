@@ -146,8 +146,9 @@ def ensure_note(
             )
         )
     elif not note.user_locked and note.content_markdown != content:
-        note.content_markdown = content
-        note.content_origin = "ai"
+        _, separator, previous_web_references = note.content_markdown.partition("\n\n## 网络拓展阅读（外部来源）\n")
+        note.content_markdown = content + (separator + "## 网络拓展阅读（外部来源）\n" + previous_web_references if separator else "")
+        note.content_origin = "ai_web_augmented" if separator else "ai"
         note.revision_number += 1
         db.add(
             NoteRevision(

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import Column, ForeignKey, Index, String, Table, Text, UniqueConstraint
+from sqlalchemy import Column, ForeignKey, Index, String, Table, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
@@ -43,6 +43,7 @@ class Course(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     materials: Mapped[list[Material]] = relationship(
         back_populates="course", cascade="all, delete-orphan"
@@ -56,6 +57,7 @@ class Material(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     course_id: Mapped[str] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"))
     lecture_title: Mapped[str] = mapped_column(String(200), nullable=False)
+    topic_title: Mapped[str | None] = mapped_column(String(200), nullable=True)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     stored_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     media_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -63,6 +65,8 @@ class Material(Base):
     status: Mapped[str] = mapped_column(String(30), default="pending", nullable=False)
     page_count: Mapped[int] = mapped_column(default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     course: Mapped[Course] = relationship(back_populates="materials")
     pages: Mapped[list[MaterialPage]] = relationship(
@@ -75,7 +79,16 @@ class Material(Base):
 
 class ProcessingJob(Base):
     __tablename__ = "processing_jobs"
-    __table_args__ = (Index("ix_processing_jobs_material_id", "material_id"),)
+    __table_args__ = (
+        Index("ix_processing_jobs_material_id", "material_id"),
+        Index(
+            "uq_processing_jobs_active_material",
+            "material_id",
+            unique=True,
+            sqlite_where=text("status IN ('pending', 'processing')"),
+        ),
+        Index("uq_processing_jobs_idempotency_key", "idempotency_key", unique=True),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     material_id: Mapped[str] = mapped_column(ForeignKey("materials.id", ondelete="CASCADE"))
@@ -83,8 +96,16 @@ class ProcessingJob(Base):
     status: Mapped[str] = mapped_column(String(30), default="pending", nullable=False)
     progress: Mapped[int] = mapped_column(default=0, nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    phase: Mapped[str] = mapped_column(String(30), default="queued", nullable=False)
+    web_search_status: Mapped[str] = mapped_column(String(30), default="not_started", nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now, nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    attempt_count: Mapped[int] = mapped_column(default=0, nullable=False)
+    idempotency_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     material: Mapped[Material] = relationship(back_populates="jobs")
 
@@ -209,6 +230,24 @@ class KnowledgeEdge(Base):
     target_node: Mapped[KnowledgeNode] = relationship(
         foreign_keys=[target_node_id], back_populates="incoming_edges"
     )
+
+
+class WebSource(Base):
+    __tablename__ = "web_sources"
+    __table_args__ = (Index("ix_web_sources_course_id", "course_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    course_id: Mapped[str] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"))
+    material_id: Mapped[str | None] = mapped_column(ForeignKey("materials.id", ondelete="CASCADE"), nullable=True)
+    knowledge_node_id: Mapped[str | None] = mapped_column(ForeignKey("knowledge_nodes.id", ondelete="SET NULL"), nullable=True)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    site_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    snippet: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    search_query: Mapped[str] = mapped_column(String(1000), nullable=False)
+    score: Mapped[float | None] = mapped_column(nullable=True)
+    published_at: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    retrieved_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
 
 
 class Note(Base):
