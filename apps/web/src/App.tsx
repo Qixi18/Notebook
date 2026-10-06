@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, matchPath, Route, Routes, useLocation } from 'react-router-dom'
 
-import { api } from './api'
+import { ApiError, api } from './api'
 import { AppLayout, WorkspaceProvider, type ChatMessage } from './components/AppLayout'
 import { CourseRouteGuard } from './components/CourseGate'
 import { AssistantPage } from './pages/AssistantPage'
@@ -30,6 +30,7 @@ function App() {
   const courseId = matchPath('/courses/:courseId/*', location.pathname)?.params.courseId
   const [courses, setCourses] = useState<Course[]>([])
   const [coursesLoading, setCoursesLoading] = useState(true)
+  const [courseContentLoading, setCourseContentLoading] = useState(false)
   const [materials, setMaterials] = useState<Material[]>([])
   const [selectedMaterialId, setSelectedMaterialId] = useState<string>()
   const [pages, setPages] = useState<Page[]>([])
@@ -103,6 +104,7 @@ function App() {
     setJob(undefined)
     setMessages([{ role: 'assistant', content: '你好，我会优先从当前课程已解析的页面中寻找回答依据。' }])
     setQuestion('')
+    setCourseContentLoading(Boolean(courseId))
 
     if (!courseId) return () => { active = false }
 
@@ -118,8 +120,10 @@ function App() {
       setSelectedNoteId(nextNotes[0]?.id)
       setGraph(nextGraph)
       setError(undefined)
+      setCourseContentLoading(false)
     }).catch((cause: unknown) => {
       if (!active) return
+      setCourseContentLoading(false)
       const message = cause instanceof Error ? cause.message : '课程内容读取失败'
       if (message.includes('课程不存在')) {
         setError(undefined)
@@ -154,8 +158,10 @@ function App() {
       void api.getJob(job.id).then(async (nextJob) => {
         if (!active) return
         setJob(nextJob)
-        if (nextJob.status === 'completed' && courseId) {
-          await Promise.all([refreshMaterials(courseId), refreshNotes(courseId), refreshGraph(courseId)])
+        if ((nextJob.status === 'completed' || nextJob.status === 'failed') && courseId) {
+          const refreshes = [refreshMaterials(courseId)]
+          if (nextJob.status === 'completed') refreshes.push(refreshNotes(courseId), refreshGraph(courseId))
+          await Promise.all(refreshes)
         }
       }).catch((cause: unknown) => {
         if (active) setError(cause instanceof Error ? cause.message : '任务状态读取失败')
@@ -199,7 +205,9 @@ function App() {
       setEditingNote(false)
       setError(undefined)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '笔记保存失败')
+      setError(cause instanceof ApiError && cause.status === 409
+        ? '这条笔记已在其他操作中更新。你的修改仍保留在编辑框里，请先复制保存，再刷新页面载入最新版本并手动合并。'
+        : cause instanceof Error ? cause.message : '笔记保存失败')
     } finally {
       setNoteSaving(false)
     }
@@ -213,11 +221,12 @@ function App() {
     setAssistantBusy(true)
     try {
       const response = await api.askAssistant(courseId, currentQuestion, selectedMaterialId, selectedPageNumber)
-      setMessages((current) => [...current, { role: 'assistant', content: response.answer, sources: response.sources }])
+      setMessages((current) => [...current, { role: 'assistant', content: response.answer, sources: response.sources, mode: response.mode, status: 'explaining' }])
     } catch (cause) {
       setMessages((current) => [...current, {
         role: 'assistant',
         content: cause instanceof Error ? cause.message : '问答请求失败',
+        status: 'error',
       }])
     } finally {
       setAssistantBusy(false)
@@ -229,6 +238,7 @@ function App() {
     courseId,
     course,
     coursesLoading,
+    courseContentLoading,
     materials,
     selectedMaterialId,
     setSelectedMaterialId,
@@ -245,6 +255,7 @@ function App() {
     graph,
     job,
     busy: busy || assistantBusy,
+    assistantBusy,
     noteSaving,
     error,
     setError,
@@ -256,7 +267,7 @@ function App() {
     setQuestion,
     askQuestion,
     refreshCourses,
-  }), [courses, courseId, course, coursesLoading, materials, selectedMaterialId, pages, selectedPageNumber, notes, selectedNote, noteDraft, editingNote, graph, job, busy, assistantBusy, noteSaving, error, createCourse, uploadMaterial, saveNote, messages, question, askQuestion, refreshCourses])
+  }), [courses, courseId, course, coursesLoading, courseContentLoading, materials, selectedMaterialId, pages, selectedPageNumber, notes, selectedNote, noteDraft, editingNote, graph, job, busy, assistantBusy, noteSaving, error, createCourse, uploadMaterial, saveNote, messages, question, askQuestion, refreshCourses])
 
   return (
     <WorkspaceProvider value={workspace}>

@@ -69,6 +69,25 @@ export type Note = {
   updated_at: string
 }
 
+export type NoteRevision = {
+  id: string
+  note_id: string
+  revision_number: number
+  content_markdown: string
+  content_origin: string
+  user_locked: boolean
+  created_at: string
+}
+
+export type NoteSourceRef = {
+  id: string
+  page_block_id: string
+  source_type: string
+  quote: string
+  material_id: string
+  page_number: number
+}
+
 export type KnowledgeNode = {
   id: string
   course_id: string

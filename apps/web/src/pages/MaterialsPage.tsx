@@ -1,16 +1,14 @@
 import { useState, type FormEvent } from 'react'
+import { EmptyState } from '../components/EmptyState'
+import { ProcessingStatus } from '../components/ProcessingStatus'
 import { useWorkspace } from '../components/AppLayout'
 
-const statusLabels: Record<string, string> = {
-  pending: '等待解析',
-  processing: '解析中',
-  completed: '已完成',
-  failed: '解析失败',
-}
+const statusLabels: Record<string, string> = { pending: '等待处理', processing: '解析中', completed: '已完成', failed: '解析失败' }
 
 export function MaterialsPage() {
   const {
     course,
+    courseContentLoading,
     materials,
     selectedMaterialId,
     setSelectedMaterialId,
@@ -49,18 +47,12 @@ export function MaterialsPage() {
         </div>
       </form>
 
-      {job && job.status !== 'completed' && (
-        <section className={`processing-card processing-${job.status}`} aria-live="polite">
-          <div className="processing-card-heading"><strong>{statusLabels[job.status] ?? job.status}</strong><span>{job.progress}%</span></div>
-          <div className="progress-track"><span style={{ width: `${job.progress}%` }} /></div>
-          <p>{job.error_message || (job.status === 'failed' ? '解析失败，请检查文件后重试。' : 'NoteBuddy 正在逐页解析这份 PPTX。')}</p>
-        </section>
-      )}
+      <ProcessingStatus job={job?.material_id === selectedMaterialId ? job : undefined} material={materials.find((item) => item.id === selectedMaterialId)} />
 
       <section className="materials-list-section">
         <div className="section-heading-row"><div><span className="eyebrow">当前课程</span><h2>已上传资料</h2></div></div>
-        {materials.length === 0 ? (
-          <div className="feature-empty-card"><span className="empty-state-mark">▱</span><h2>还没有课程资料</h2><p>选择 PPTX 上传后，解析状态和课件页面会显示在这里。</p></div>
+        {courseContentLoading ? <div className="page-loading" role="status">正在读取课程资料…</div> : materials.length === 0 ? (
+          <EmptyState icon="▱" title="还没有课程资料" description="选择 PPTX 上传后，解析状态和课件页面会显示在这里。" />
         ) : (
           <div className="materials-browser">
             <div className="materials-list" aria-label="课程资料列表">

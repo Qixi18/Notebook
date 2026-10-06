@@ -10,6 +10,7 @@ import type {
   Note,
   Page,
 } from '../types'
+import { CourseSwitcher } from './CourseSwitcher'
 
 export type Feature = 'notes' | 'knowledge-tree' | 'materials' | 'assistant'
 
@@ -17,6 +18,8 @@ export type ChatMessage = {
   role: 'user' | 'assistant'
   content: string
   sources?: AssistantResponse['sources']
+  mode?: string
+  status?: 'idle' | 'thinking' | 'explaining' | 'error'
 }
 
 export type WorkspaceContextValue = {
@@ -24,6 +27,7 @@ export type WorkspaceContextValue = {
   courseId?: string
   course?: Course
   coursesLoading: boolean
+  courseContentLoading: boolean
   materials: Material[]
   selectedMaterialId?: string
   setSelectedMaterialId: (id: string | undefined) => void
@@ -40,6 +44,7 @@ export type WorkspaceContextValue = {
   graph: KnowledgeGraph
   job?: Job
   busy: boolean
+  assistantBusy: boolean
   noteSaving: boolean
   error?: string
   setError: (message: string | undefined) => void
@@ -128,30 +133,15 @@ export function AppLayout() {
           </button>
         ))}
 
-        <div className="sidebar-course-block">
-          <div className="sidebar-section-label">当前课程</div>
-          {course ? (
-            <label className="course-switcher-label">
-              <span className="course-dot" />
-              <select
-                className="course-switcher"
-                aria-label="切换当前课程"
-                value={course.id}
-                onChange={(event) => {
-                  const nextCourseId = event.target.value
-                  const feature = activeFeature && featureLabels[activeFeature] ? activeFeature : undefined
-                  navigate(feature ? featurePath(nextCourseId, feature) : `/courses/${nextCourseId}`)
-                }}
-              >
-                {courses.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
-            </label>
-          ) : (
-            <button className="current-course-empty" onClick={() => navigate('/')}>
-              {coursesLoading ? '正在读取课程…' : courses.length ? '请选择一门课程' : '先创建一门课程'}
-            </button>
-          )}
-        </div>
+        <CourseSwitcher
+          course={course}
+          courses={courses}
+          loading={coursesLoading}
+          onSelect={(nextCourseId) => {
+            const feature = activeFeature && featureLabels[activeFeature] ? activeFeature : undefined
+            navigate(feature ? featurePath(nextCourseId, feature) : `/courses/${nextCourseId}`)
+          }}
+        />
 
         <div className="sidebar-footer">
           <span className="local-status-dot" />本地学习空间 · 数据保存在本机

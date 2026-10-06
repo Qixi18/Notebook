@@ -5,6 +5,8 @@ import type {
   Job,
   Material,
   Note,
+  NoteRevision,
+  NoteSourceRef,
   Page,
   UploadResponse,
 } from './types'
@@ -12,10 +14,24 @@ import type {
 async function request<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
   const response = await fetch(input, init)
   if (!response.ok) {
-    const detail = await response.text()
-    throw new Error(detail || `请求失败：${response.status}`)
+    const body = await response.text()
+    let detail = body
+    try {
+      const parsed = JSON.parse(body) as { detail?: string }
+      detail = parsed.detail ?? body
+    } catch {
+      // Keep plain-text upstream error bodies readable.
+    }
+    throw new ApiError(detail || `请求失败：${response.status}`, response.status)
   }
   return response.json() as Promise<T>
+}
+
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message)
+    this.name = 'ApiError'
+  }
 }
 
 export const api = {
@@ -39,6 +55,8 @@ export const api = {
   getJob: (jobId: string) => request<Job>(`/api/v1/jobs/${jobId}`),
   listPages: (materialId: string) => request<Page[]>(`/api/v1/materials/${materialId}/pages`),
   listNotes: (courseId: string) => request<Note[]>(`/api/v1/courses/${courseId}/notes`),
+  getNoteRevisions: (noteId: string) => request<NoteRevision[]>(`/api/v1/notes/${noteId}/revisions`),
+  getNoteSources: (noteId: string) => request<NoteSourceRef[]>(`/api/v1/notes/${noteId}/sources`),
   getKnowledgeGraph: (courseId: string) =>
     request<KnowledgeGraph>(`/api/v1/courses/${courseId}/knowledge-graph`),
   updateNote: (noteId: string, contentMarkdown: string, expectedRevisionNumber: number) =>

@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 
 import { featureDescriptions, featureLabels, featurePath, useWorkspace, type Feature } from '../components/AppLayout'
+import { ProcessingStatus } from '../components/ProcessingStatus'
 
 const features: Feature[] = ['notes', 'knowledge-tree', 'materials', 'assistant']
 
@@ -13,7 +14,7 @@ const materialStatus: Record<string, string> = {
 
 export function CourseOverviewPage() {
   const { courseId = '' } = useParams()
-  const { course, materials, notes, graph, coursesLoading, refreshCourses } = useWorkspace()
+  const { course, courseContentLoading, materials, notes, graph, job, coursesLoading, refreshCourses } = useWorkspace()
 
   if (coursesLoading) return <div className="page-loading">正在读取课程…</div>
   if (!course) {
@@ -29,6 +30,11 @@ export function CourseOverviewPage() {
   }
 
   const latestMaterial = materials[0]
+  const latestIsReady = latestMaterial?.status === 'completed'
+  const statusCounts = materials.reduce((counts, material) => {
+    counts[material.status] = (counts[material.status] ?? 0) + 1
+    return counts
+  }, {} as Record<string, number>)
 
   return (
     <div className="course-overview page-enter">
@@ -48,15 +54,25 @@ export function CourseOverviewPage() {
         <article className="summary-card"><span>笔记</span><strong>{notes.length}</strong><small>条可复习内容</small></article>
       </section>
 
+      {courseContentLoading ? <div className="page-loading" role="status">正在汇总课程进度…</div> : <section className="course-processing-summary" aria-label="资料处理进度">
+        <div className="course-processing-heading"><div><span className="eyebrow">资料状态</span><h2>课程材料处理概况</h2></div><span>{materials.length} 份资料</span></div>
+        <div className="course-status-counts">
+          <span><i className="status-indicator status-indicator-completed" />已完成 <strong>{statusCounts.completed ?? 0}</strong></span>
+          <span><i className="status-indicator status-indicator-processing" />处理中 <strong>{(statusCounts.pending ?? 0) + (statusCounts.processing ?? 0)}</strong></span>
+          <span><i className="status-indicator status-indicator-failed" />需检查 <strong>{statusCounts.failed ?? 0}</strong></span>
+        </div>
+        {latestMaterial && <ProcessingStatus job={job?.material_id === latestMaterial.id ? job : undefined} material={latestMaterial} />}
+      </section>}
+
       <section className="course-next-step">
         <div className="next-step-mark">{latestMaterial ? '✓' : '1'}</div>
         <div>
           <span className="eyebrow">接下来</span>
-          <h2>{latestMaterial ? '继续整理这门课程' : '上传第一份课程资料'}</h2>
-          <p>{latestMaterial ? `最近资料“${latestMaterial.lecture_title}”当前状态：${materialStatus[latestMaterial.status] ?? latestMaterial.status}。` : '先上传 PPTX 课件，NoteBuddy 会按当前支持的流程解析页面并整理知识点。'}</p>
+          <h2>{!latestMaterial ? '上传第一份课程资料' : latestIsReady ? '继续整理这门课程' : latestMaterial.status === 'failed' ? '检查未完成的解析' : '资料正在准备中'}</h2>
+          <p>{latestMaterial ? latestIsReady ? `最近资料“${latestMaterial.lecture_title}”已完成解析，可以继续查看笔记和知识结构。` : `最近资料“${latestMaterial.lecture_title}”当前状态：${materialStatus[latestMaterial.status] ?? latestMaterial.status}。` : '先上传 PPTX 课件，NoteBuddy 会按当前支持的流程解析页面并整理知识点。'}</p>
         </div>
-        <Link className="secondary-button link-button" to={featurePath(courseId, latestMaterial ? 'notes' : 'materials')}>
-          {latestMaterial ? '打开笔记' : '前往课程资料'}
+        <Link className="secondary-button link-button" to={featurePath(courseId, latestIsReady ? 'notes' : 'materials')}>
+          {latestIsReady ? '打开笔记' : latestMaterial?.status === 'failed' ? '查看资料状态' : '前往课程资料'}
         </Link>
       </section>
 
