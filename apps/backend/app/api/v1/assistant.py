@@ -7,7 +7,7 @@ from app.ai.orchestrator import run_answer, source_payload
 from app.api.v1.shared import ensure_course
 from app.db.database import get_db
 from app.db.models import Material
-from app.schemas.api import AssistantRequest, AssistantResponse, AssistantSource
+from app.schemas.api import AssistantClaim, AssistantRequest, AssistantResponse, AssistantSource
 
 router = APIRouter()
 
@@ -49,8 +49,22 @@ def ask_assistant(
             support_level="web_supplement",
         ) for item in result["web_results"]
     )
+    claims = []
+    for claim in result.get("claims", []):
+        source_indexes = list(claim.get("chunk_indexes", []))
+        source_indexes.extend(len(result["chunks"]) + index for index in claim.get("web_indexes", []))
+        has_chunks = bool(claim.get("chunk_indexes"))
+        has_web = bool(claim.get("web_indexes"))
+        claims.append(AssistantClaim(
+            claim_key=str(claim.get("claim_key") or "answer"),
+            evidence_type=str(claim.get("evidence_type") or (
+                "mixed" if has_chunks and has_web else "web_supplement" if has_web else "course_related"
+            )),
+            support_level=str(claim.get("support_level") or "related"),
+            source_indexes=source_indexes,
+        ))
     db.commit()
     return AssistantResponse(
         answer=result["answer"], sources=sources, mode=result["mode"],
-        web_search_status=result["web_search_status"],
+        claims=claims, web_search_status=result["web_search_status"],
     )

@@ -31,7 +31,7 @@ export function useAssistantState(courseId?: string) {
     try {
       const response = await api.askAssistant(requestCourseId, currentQuestion, materialScope, pageScope)
       if (courseRef.current !== requestCourseId) return
-      setMessages((current) => [...current, { role: 'assistant', content: response.answer, sources: response.sources, mode: response.mode, status: 'explaining', webSearchStatus: response.web_search_status }])
+      setMessages((current) => [...current, { role: 'assistant', content: response.answer, sources: response.sources, claims: response.claims, mode: response.mode, status: 'explaining', webSearchStatus: response.web_search_status }])
     } catch (cause) {
       if (courseRef.current !== requestCourseId) return
       setMessages((current) => [...current, {

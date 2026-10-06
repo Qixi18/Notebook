@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.deepseek import DeepSeekClient, DeepSeekError
+from app.ai.evidence import claim_payload, extract_claims
 from app.ai.prompts import build_answer_messages
 from app.core.config import settings
 from app.db.models import Material, WebSource
@@ -88,7 +89,7 @@ def run_answer(
             "answer": (
                 "当前课程资料没有找到直接依据，且联网补充不可用。请缩小问题范围、选择具体讲次，或先上传相关课件。"
             ),
-            "chunks": [], "web_results": [], "mode": "no-evidence", "web_search_status": web_status,
+            "chunks": [], "web_results": [], "claims": [], "mode": "no-evidence", "web_search_status": web_status,
         }
 
     local_context = build_context(chunks)
@@ -108,7 +109,9 @@ def run_answer(
             response = client.complete_json(build_answer_messages(question, context), max_tokens=2400)
             answer = str(response.get("answer_markdown") or "").strip()
             if answer:
+                claims = extract_claims(answer, chunks, web_results)
                 return {"answer": answer, "chunks": chunks, "web_results": web_results,
+                        "claims": [claim_payload(claim) for claim in claims],
                         "mode": "deepseek-rag", "web_search_status": web_status,
                         "model_version": settings.deepseek_model}
         except DeepSeekError:
@@ -124,7 +127,9 @@ def run_answer(
     answer = "当前没有可用的 AI 模型；以下是分层检索摘录，课程资料和网络来源已分开列出。\n\n" + "\n\n".join(
         part for part in (local_excerpt, web_excerpt) if part
     )
+    claims = extract_claims(answer, chunks, web_results)
     return {"answer": answer, "chunks": chunks, "web_results": web_results,
+            "claims": [claim_payload(claim) for claim in claims],
             "mode": "local-retrieval-fallback", "web_search_status": web_status,
             "model_version": "keyword-or-hybrid-fallback"}
 

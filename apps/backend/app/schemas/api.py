@@ -1,6 +1,11 @@
 """Compatibility exports for the original API schema module."""
 
-from app.schemas.assistant import AssistantRequest, AssistantResponse, AssistantSource
+from app.schemas.assistant import (
+    AssistantClaim,
+    AssistantRequest,
+    AssistantResponse,
+    AssistantSource,
+)
 from app.schemas.backup import (
     BackupExportRequest,
     BackupPreviewRead,
@@ -39,6 +44,7 @@ from app.schemas.proposals import KnowledgeProposalRead, NoteSuggestionRead, Pro
 from app.schemas.terms import TermExplanationRequest, TermExplanationResponse
 
 __all__ = [
+    'AssistantClaim',
     'AssistantRequest',
     'AssistantResponse',
     'AssistantSource',

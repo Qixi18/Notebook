@@ -84,7 +84,7 @@ export function AssistantPage() {
     }
   }
   const displayMessages = conversationMessages.length ? conversationMessages.map((message) => ({
-    role: message.role, content: message.content, status: message.status === 'completed' ? (message.role === 'assistant' ? 'explaining' : 'idle') : 'error',
+    role: message.role, content: message.content, status: message.status === 'completed' ? (message.role === 'assistant' ? 'explaining' : 'idle') : 'error', claims: undefined,
     persistedId: message.id, evidence: message.evidence, sources: undefined, mode: undefined, webSearchStatus: undefined,
   })) : messages.map((message) => ({ ...message, persistedId: undefined, evidence: [], sources: message.sources, mode: message.mode, webSearchStatus: message.webSearchStatus }))
   const lastAssistantMessage = [...displayMessages].reverse().find((message) => message.role === 'assistant')
@@ -146,9 +146,10 @@ export function AssistantPage() {
               <span className="conversation-author">{message.role === 'assistant' ? 'NoteBuddy' : '你'}</span>
               <p>{message.content}</p>
               {message.status === 'explaining' && <span className="answer-mode-label">{message.mode === 'deepseek-rag' ? 'AI 生成 · 参考当前课程来源' : message.mode === 'local-retrieval-fallback' ? '本地检索结果 · 模型回答暂不可用' : '当前课程资料检索'}</span>}
-              {message.status === 'explaining' && message.webSearchStatus && <span className="web-search-result-label">{message.webSearchStatus === 'completed' ? '网络补充：已检索并列出来源' : message.webSearchStatus === 'no_results' ? '网络补充：没有找到达到相关性要求的来源' : message.webSearchStatus === 'failed' ? '网络补充：本次检索失败' : '网络补充：未配置，当前仅使用课程资料'}</span>}
+              {message.status === 'explaining' && message.webSearchStatus && <span className="web-search-result-label">{message.webSearchStatus === 'completed' ? '网络补充：已检索并列出来源' : message.webSearchStatus === 'no_results' ? '网络补充：没有找到达到相关性要求的来源' : message.webSearchStatus === 'failed' ? '网络补充：本次检索失败' : message.webSearchStatus === 'disabled_by_request' ? '网络补充：按本次请求关闭' : message.webSearchStatus === 'daily_limit' ? '网络补充：已达到今日查询上限' : '网络补充：未配置，当前仅使用课程资料'}</span>}
               {message.role === 'assistant' && message.status === 'explaining' && (!message.sources || message.sources.length === 0) && <span className="answer-no-evidence">{message.webSearchStatus === 'failed' ? '课程资料没有匹配页面，联网检索本次失败。' : message.webSearchStatus === 'no_results' ? '课程资料没有匹配页面，联网检索也没有找到可靠来源。' : '这次回答没有找到可直接引用的课程页面；联网搜索尚未配置。'}</span>}
-              {'evidence' in message && message.evidence.length > 0 && <div className="answer-evidence-list"><span>已保存证据映射</span>{message.evidence.map((item) => <small key={item.id}>{item.evidence_type} · {item.location_label ?? '来源位置'} · {item.support_level}</small>)}</div>}
+              {message.claims && message.claims.length > 0 && <div className="answer-evidence-list"><span>回答中的结论分类</span>{message.claims.map((claim) => <small key={claim.claim_key}>{claim.claim_key} · {claim.evidence_type} · {claim.support_level} · {claim.source_indexes.length} 条来源</small>)}</div>}
+              {'evidence' in message && message.evidence.length > 0 && <div className="answer-evidence-list"><span>已保存证据映射</span>{message.evidence.map((item) => <small key={item.id}>{item.claim_key} · {item.evidence_type} · {item.location_label ?? '来源位置'} · {item.support_level}</small>)}</div>}
               {'persistedId' in message && message.role === 'assistant' && message.status === 'explaining' && <div className="answer-feedback-actions"><button type="button" onClick={() => courseId && void api.saveFeedback(courseId, { target_type: 'assistant_message', target_id: message.persistedId!, category: 'helpful' }).then(() => setFeedbackSaved(message.persistedId))}>有帮助</button><button type="button" onClick={() => courseId && void api.saveFeedback(courseId, { target_type: 'assistant_message', target_id: message.persistedId!, category: 'not_helpful' }).then(() => setFeedbackSaved(message.persistedId))}>需改进</button>{feedbackSaved === message.persistedId && <small>反馈已保存</small>}</div>}
               {message.sources?.length ? (
                 <div className="answer-sources"><span>回答依据 · 课程课件与网络补充（分开标注）</span>

@@ -145,8 +145,16 @@ export type WebSource = {
 export type AssistantResponse = {
   answer: string
   sources: AssistantSource[]
+  claims: AssistantClaim[]
   mode: string
-  web_search_status: 'unavailable' | 'failed' | 'no_results' | 'completed'
+  web_search_status: 'unavailable' | 'failed' | 'no_results' | 'completed' | 'disabled_by_request' | 'daily_limit'
+}
+
+export type AssistantClaim = {
+  claim_key: string
+  evidence_type: string
+  support_level: string
+  source_indexes: number[]
 }
 
 export type Note = {

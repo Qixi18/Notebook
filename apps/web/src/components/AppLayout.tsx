@@ -18,9 +18,10 @@ export type ChatMessage = {
   role: 'user' | 'assistant'
   content: string
   sources?: AssistantResponse['sources']
+  claims?: AssistantResponse['claims']
   mode?: string
   status?: 'idle' | 'thinking' | 'explaining' | 'error'
-  webSearchStatus?: 'unavailable' | 'failed' | 'no_results' | 'completed'
+  webSearchStatus?: 'unavailable' | 'failed' | 'no_results' | 'completed' | 'disabled_by_request' | 'daily_limit'
 }
 
 export type WorkspaceContextValue = {

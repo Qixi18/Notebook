@@ -13,7 +13,6 @@ class AssistantRequest(BaseModel):
     learning_goal: str | None = Field(default=None, max_length=60)
 
 
-
 class AssistantSource(BaseModel):
     source_type: str = "course_material"
     material_id: str | None = None
@@ -30,9 +29,16 @@ class AssistantSource(BaseModel):
     score_source: str | None = None
 
 
+class AssistantClaim(BaseModel):
+    claim_key: str
+    evidence_type: str = "course_related"
+    support_level: str = "related"
+    source_indexes: list[int] = Field(default_factory=list)
+
 
 class AssistantResponse(BaseModel):
     answer: str
     sources: list[AssistantSource]
+    claims: list[AssistantClaim] = Field(default_factory=list)
     mode: str = "local-retrieval-preview"
     web_search_status: str = "unavailable"

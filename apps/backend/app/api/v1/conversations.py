@@ -160,25 +160,40 @@ def send_message(
         )
         db.add(assistant)
         db.flush()
-        for chunk in result["chunks"]:
-            source_ref = db.scalar(select(SourceRef).where(
-                SourceRef.page_block_id == chunk.page_block_id,
-                SourceRef.status == "active",
-            )) if chunk.page_block_id else None
-            db.add(MessageEvidence(
-                message_id=assistant.id,
-                source_ref_id=source_ref.id if source_ref else None,
-                claim_key="answer",
-                evidence_type="course_direct" if chunk.direct_support else "course_related",
-                support_level="direct" if chunk.direct_support else "related",
-            ))
-        for item in result["web_results"]:
-            source = db.scalar(select(WebSource).where(WebSource.course_id == conversation.course_id, WebSource.url == item["url"]))
-            if source is not None:
+        claims = result.get("claims") or [{
+            "claim_key": "answer",
+            "chunk_indexes": list(range(len(result["chunks"]))),
+            "web_indexes": list(range(len(result["web_results"]))),
+        }]
+        for claim in claims:
+            for chunk_index in claim.get("chunk_indexes", []):
+                if not isinstance(chunk_index, int) or not 0 <= chunk_index < len(result["chunks"]):
+                    continue
+                chunk = result["chunks"][chunk_index]
+                source_ref = db.scalar(select(SourceRef).where(
+                    SourceRef.page_block_id == chunk.page_block_id,
+                    SourceRef.status == "active",
+                )) if chunk.page_block_id else None
                 db.add(MessageEvidence(
-                    message_id=assistant.id, web_source_id=source.id, claim_key="answer",
-                    evidence_type="web_supplement", support_level="supplement",
+                    message_id=assistant.id,
+                    source_ref_id=source_ref.id if source_ref else None,
+                    claim_key=str(claim.get("claim_key") or "answer"),
+                    evidence_type=str(claim.get("evidence_type") or (
+                        "course_direct" if chunk.direct_support else "course_related"
+                    )),
+                    support_level="direct" if chunk.direct_support else "related",
                 ))
+            for web_index in claim.get("web_indexes", []):
+                if not isinstance(web_index, int) or not 0 <= web_index < len(result["web_results"]):
+                    continue
+                item = result["web_results"][web_index]
+                source = db.scalar(select(WebSource).where(WebSource.course_id == conversation.course_id, WebSource.url == item["url"]))
+                if source is not None:
+                    db.add(MessageEvidence(
+                        message_id=assistant.id, web_source_id=source.id,
+                        claim_key=str(claim.get("claim_key") or "answer"),
+                        evidence_type="web_supplement", support_level="supplement",
+                    ))
         conversation.updated_at = datetime.now(UTC)
         db.commit()
         db.refresh(assistant)
