@@ -8,6 +8,34 @@ $frontendUrl = 'http://127.0.0.1:5173'
 Get-Command uv -ErrorAction Stop | Out-Null
 Get-Command npm -ErrorAction Stop | Out-Null
 
+function Assert-PortFree([int] $port) {
+    $listeners = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
+    if ($listeners.Count -gt 0) {
+        $owners = ($listeners | Select-Object -ExpandProperty OwningProcess -Unique) -join ', '
+        throw "端口 $port 已被占用（进程 $owners）。请先停止占用进程后再启动 NoteBuddy。"
+    }
+}
+
+function Stop-ProcessTree([int] $processId) {
+    $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $processId" -ErrorAction SilentlyContinue)
+    foreach ($child in $children) {
+        Stop-ProcessTree ([int] $child.ProcessId)
+    }
+    Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+}
+
+function Stop-NoteBuddyProcesses {
+    $running = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.CommandLine -and $_.CommandLine.Contains($repo) -and $_.Name -in @('python.exe', 'node.exe', 'cmd.exe')
+    })
+    foreach ($process in $running) {
+        Stop-ProcessTree ([int] $process.ProcessId)
+    }
+}
+
+Assert-PortFree 8000
+Assert-PortFree 5173
+
 if (Test-Path (Join-Path $repo '.env')) {
     Write-Host 'Found local .env configuration.'
 } else {
@@ -69,11 +97,12 @@ try {
     }
 } finally {
     if ($backendProcess -and -not $backendProcess.HasExited) {
-        Stop-Process -Id $backendProcess.Id -Force
+        Stop-ProcessTree $backendProcess.Id
         Write-Host 'Backend process stopped.'
     }
     if ($workerProcess -and -not $workerProcess.HasExited) {
-        Stop-Process -Id $workerProcess.Id -Force
+        Stop-ProcessTree $workerProcess.Id
         Write-Host 'Material worker stopped.'
     }
+    Stop-NoteBuddyProcesses
 }

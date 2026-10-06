@@ -34,6 +34,11 @@ export function AssistantPage() {
   const [conversationBusy, setConversationBusy] = useState(false)
   const [learningGoal, setLearningGoal] = useState('理解概念')
   const [feedbackSaved, setFeedbackSaved] = useState<string>()
+  const [term, setTerm] = useState('')
+  const [discipline, setDiscipline] = useState('')
+  const [termExplanation, setTermExplanation] = useState<Awaited<ReturnType<typeof api.explainTerm>>>()
+  const [termBusy, setTermBusy] = useState(false)
+  const [termError, setTermError] = useState<string>()
   useEffect(() => { setAssistantMaterialId(undefined); setAssistantPageNumber(undefined) }, [courseId])
   useEffect(() => { void api.getWebSearchStatus().then(setWebStatus).catch(() => setWebStatus({ configured: false, status: 'unavailable' })) }, [])
   useEffect(() => {
@@ -63,6 +68,20 @@ export function AssistantPage() {
       const answer = await api.sendConversationMessage(conversationId, { question: text, material_id: assistantMaterialId, page_number: assistantPageNumber, learning_goal: learningGoal, allow_web: true, idempotency_key: `${conversationId}-${Date.now()}` })
       setConversationMessages((current) => [...current, { id: `local-${Date.now()}`, conversation_id: conversationId, role: 'user', content: text, learning_goal: learningGoal, status: 'completed', model_version: null, failure_type: null, created_at: new Date().toISOString(), evidence: [] }, answer])
     } catch { setQuestion(text) } finally { setConversationBusy(false) }
+  }
+  async function explainTerm(event: FormEvent) {
+    event.preventDefault()
+    if (!courseId || !term.trim() || termBusy) return
+    try {
+      setTermBusy(true)
+      setTermError(undefined)
+      setTermExplanation(await api.explainTerm(courseId, term.trim(), discipline.trim() || undefined))
+    } catch (cause) {
+      setTermError(cause instanceof Error ? cause.message : '术语解释失败')
+      setTermExplanation(undefined)
+    } finally {
+      setTermBusy(false)
+    }
   }
   const displayMessages = conversationMessages.length ? conversationMessages.map((message) => ({
     role: message.role, content: message.content, status: message.status === 'completed' ? (message.role === 'assistant' ? 'explaining' : 'idle') : 'error',
@@ -108,6 +127,18 @@ export function AssistantPage() {
           </label>
           {assistantMaterialId && <label className="assistant-material-scope">限定页面<select value={assistantPageNumber ?? ''} onChange={(event) => setAssistantPageNumber(event.target.value ? Number(event.target.value) : undefined)}><option value="">整份资料</option>{assistantMaterialId === selectedMaterialId && pages.map((page) => <option value={page.page_number} key={page.id}>第 {page.page_number} 页 · {page.title ?? '未识别标题'}</option>)}</select></label>}
         </div>
+
+        <details className="assistant-term-panel">
+          <summary>术语原文说明</summary>
+          <p>输入课程中的术语，查看原文、常见译法和学科语境。没有可核验出处时会明确标记不确定。</p>
+          <form onSubmit={(event) => void explainTerm(event)}>
+            <input value={term} onChange={(event) => setTerm(event.target.value)} maxLength={200} placeholder="例如：dependency injection" aria-label="术语" />
+            <input value={discipline} onChange={(event) => setDiscipline(event.target.value)} maxLength={100} placeholder="学科（可选）" aria-label="学科" />
+            <button className="secondary-button" type="submit" disabled={!term.trim() || termBusy}>{termBusy ? '查询中…' : '解释术语'}</button>
+          </form>
+          {termError && <p className="form-error" role="alert">{termError}</p>}
+          {termExplanation && <div className={`term-explanation ${termExplanation.uncertain ? 'term-explanation-uncertain' : ''}`} role="status"><strong>{termExplanation.original}{termExplanation.discipline ? ` · ${termExplanation.discipline}` : ''}</strong>{termExplanation.common_translations.length > 0 && <span>常见译法：{termExplanation.common_translations.join('、')}</span>}<p>{termExplanation.explanation}</p><small>{termExplanation.source_note}{termExplanation.uncertain ? ' · 不确定' : ''}</small></div>}
+        </details>
 
         <div className="assistant-conversation" aria-live="polite">
           {displayMessages.map((message, index) => (

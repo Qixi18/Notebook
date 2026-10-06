@@ -25,6 +25,7 @@
 | 知识变更 | `GET /courses/{course_id}/knowledge-changes` | 查看新增、深化、来源补充和审核理由 |
 | 笔记建议 | `GET/POST /notes/{id}/suggestions`、`POST /notes/{id}/suggestions/{suggestion_id}/review` | AI 只写建议；用户确认后才生成用户版本 |
 | 反馈 | `POST/GET /courses/{course_id}/feedback` | 答案、笔记、提案和来源反馈按目标去重并验证课程归属 |
+| 术语说明 | `POST /courses/{course_id}/terms/explain` | 返回原文、常见译法、学科语境和出处不确定性；未配置可核验服务时保守返回，不伪造词源 |
 
 答疑先检索课程内部资料；只有没有直接命中且策略允许时才调用联网搜索。回答来源按课件、网络补充、直接支持/相关支持分别标记。
 
@@ -32,9 +33,9 @@
 
 | 能力 | 接口 | 行为 |
 |---|---|---|
-| 导出完整包 | `POST /backups/export` | 生成含 SQLite 一致性快照、原文件和哈希清单的 `.notebuddy.zip`，不含 `.env` 和派生索引 |
-| 导入预览 | `POST /backups/preview` | 隔离读取并校验版本、路径、数量、哈希和 SQLite integrity，不修改当前库 |
-| 隔离恢复 | `POST /backups/restore` | 校验后恢复到本地隔离目录并记录状态，不未经确认替换当前数据 |
+| 导出完整包 | `POST /backups/export`（可选 `course_id`） | 不传课程时导出工作区；传 `course_id` 时只保留该课程及其关联资料、原文件和哈希清单；两者均不含 `.env` 和派生索引 |
+| 导入预览 | `POST /backups/preview` | 隔离读取并校验版本、路径、数量、哈希、SQLite 完整性、数据库原文件引用，并返回当前同名文件冲突；不修改当前库 |
+| 隔离恢复 | `POST /backups/restore`（multipart `file` + `confirmed=true`） | 仅在完成预览确认后恢复到本地隔离目录并记录状态，不替换当前数据 |
 | 备份状态 | `GET /backups/{id}`、`GET /courses/{course_id}/backups` | 返回处理状态、清单摘要和脱敏错误 |
 
 `GET /web-search/status` 继续兼容旧前端字段，但 Key 存在时状态是 `configured_untested`，不代表认证或搜索已成功。调用模型、联网和 Embedding 的实际结果需单独记录，不以配置状态替代联调验收。

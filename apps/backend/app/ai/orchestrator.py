@@ -13,7 +13,13 @@ from app.core.config import settings
 from app.db.models import Material, WebSource
 from app.retrieval.rerank import rerank
 from app.retrieval.service import RetrievedChunk, build_context, retrieve
-from app.web_search.policy import SearchPolicy, can_search, record_search
+from app.web_search.policy import (
+    SearchPolicy,
+    cache_search,
+    cached_search,
+    can_search,
+    record_search,
+)
 from app.web_search.source_review import review_results
 
 
@@ -40,12 +46,19 @@ def run_answer(
     from app.web_search.tavily import WebSearchError
     from app.web_search.tavily import configured as web_search_configured
     from app.web_search.tavily import search as web_search
-    if allowed and web_search_configured() and not chunks:
+    needs_web = not chunks or not any(chunk.direct_support for chunk in chunks)
+    if allowed and web_search_configured() and needs_web:
         try:
             scope = f" {selected_material.lecture_title}" if selected_material else ""
-            record_search()
-            web_results = [item for item in web_search(f"{course_name}{scope} {question}", max_results=policy.max_results)]
-            web_results = review_results(web_results)["results"]
+            search_query = f"{course_name}{scope} {question}"
+            cached_results = cached_search(search_query, max_age_seconds=policy.cache_seconds)
+            if cached_results is not None:
+                web_results = cached_results
+            else:
+                record_search()
+                web_results = [item for item in web_search(search_query, max_results=policy.max_results)]
+                web_results = review_results(web_results)["results"]
+                cache_search(search_query, web_results)
             web_status = "completed" if web_results else "no_results"
             for item in web_results:
                 if db.scalar(select(WebSource.id).where(WebSource.course_id == course_id, WebSource.url == item["url"])) is None:
@@ -67,7 +80,7 @@ def run_answer(
         web_status = "disabled_by_request"
     elif reason == "daily_limit":
         web_status = "daily_limit"
-    elif not chunks and not web_search_configured():
+    elif needs_web and not web_search_configured():
         web_status = "unavailable"
 
     if not chunks and not web_results:

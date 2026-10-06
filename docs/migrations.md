@@ -13,6 +13,6 @@
 ./scripts/restore.ps1 -Checkpoint 'D:\path\to\checkpoint' -Destination 'D:\path\to\empty-data-dir'
 ```
 
-恢复脚本只写入空目录，不替换当前 `data/`。先在空目录恢复并核对课程、资料、笔记修订、来源和会话，再停止服务并由操作者安排数据目录切换。阶段四的 `.notebuddy.zip` 包还会在导入预览和恢复前校验包版本、路径、文件哈希及 SQLite integrity。
+普通恢复脚本只写入空目录，不替换当前 `data/`。阶段四也提供显式的 `./scripts/restore.ps1 -Package -Replace -Checkpoint <包>` 路径：它要求服务停止，先保留同级检查点，再切换已验证的临时目录；失败时恢复原目录。阶段四的 `.notebuddy.zip` 包还会在导入预览和恢复前校验包版本、路径、文件哈希及 SQLite integrity。
 
 迁移验证应覆盖新库、已存在的无版本旧库、再次启动、失败回滚和保留用户笔记/来源。执行 `cd apps/backend; uv run pytest -q` 可运行隔离目录中的相关回归。迁移或删除发生异常时，不要删除检查点，也不要反复手工执行 `ALTER TABLE`。

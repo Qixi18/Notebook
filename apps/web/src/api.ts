@@ -7,6 +7,7 @@ import { noteApi } from './api/notes'
 import { conversationApi } from './api/conversations'
 import { feedbackApi } from './api/feedback'
 import { backupApi } from './api/backup'
+import { termsApi } from './api/terms'
 
 export { ApiError } from './api/http'
 export type { Capabilities, OCRStatus, ProviderStatus } from './api/config'
@@ -21,4 +22,5 @@ export const api = {
   ...conversationApi,
   ...feedbackApi,
   ...backupApi,
+  ...termsApi,
 }

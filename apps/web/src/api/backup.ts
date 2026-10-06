@@ -9,8 +9,8 @@ export const backupApi = {
     const form = new FormData(); form.append('file', file)
     return request<BackupPreview>('/api/v1/backups/preview', { method: 'POST', body: form })
   },
-  restoreBackup: (file: File) => {
-    const form = new FormData(); form.append('file', file)
+  restoreBackup: (file: File, confirmed = false) => {
+    const form = new FormData(); form.append('file', file); form.append('confirmed', String(confirmed))
     return request<BackupRecord>('/api/v1/backups/restore', { method: 'POST', body: form })
   },
 }

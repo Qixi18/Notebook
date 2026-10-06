@@ -304,3 +304,12 @@ export type BackupPreview = {
   conflicts: string[]
   errors: string[]
 }
+
+export type TermExplanation = {
+  original: string
+  common_translations: string[]
+  discipline: string | null
+  explanation: string
+  source_note: string
+  uncertain: boolean
+}

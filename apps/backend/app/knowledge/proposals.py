@@ -35,13 +35,18 @@ def create_knowledge_proposal(
     proposed_delta: dict | None = None,
     model_version: str | None = "phase3-rule-1",
 ) -> KnowledgeProposal:
-    existing = db.scalar(select(KnowledgeProposal).where(
+    filters = [
         KnowledgeProposal.course_id == course_id,
-        KnowledgeProposal.material_id == material_id,
         KnowledgeProposal.candidate_name == candidate_name[:300],
         KnowledgeProposal.kind == kind,
         KnowledgeProposal.status.in_(["pending", "auto_applied"]),
-    ))
+    ]
+    filters.append(
+        KnowledgeProposal.material_id.is_(None)
+        if material_id is None
+        else KnowledgeProposal.material_id == material_id
+    )
+    existing = db.scalar(select(KnowledgeProposal).where(*filters))
     if existing is not None:
         return existing
     proposal = KnowledgeProposal(

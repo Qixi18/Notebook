@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 import { CourseGate } from '../components/CourseGate'
+import { BackupPanel } from '../components/BackupPanel'
+import { DiagnosticsPanel } from '../components/DiagnosticsPanel'
 import {
   featureDescriptions,
   featureLabels,
@@ -136,6 +138,9 @@ export function HomePage() {
         <p>连接测试会向对应服务发送一个最小请求，可能产生少量调用费用。密钥仅保存在本机后端配置中。</p>
         <p>OCR：{ocrStatus?.status === 'ready' ? '已启用并可用' : ocrStatus?.status === 'missing_dependency' ? '已配置但缺少本机依赖' : '未启用'}。扫描页会保留候选状态，不伪造原文。</p>
       </section>
+
+      <DiagnosticsPanel />
+      <BackupPanel />
 
       <section className="feature-section" aria-labelledby="feature-heading">
         <div className="section-heading-row">

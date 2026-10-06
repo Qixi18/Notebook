@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 import shutil
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -29,10 +30,10 @@ def export_backup(payload: BackupExportRequest, db: Session = Depends(get_db)) -
     db.refresh(record)
     destination = settings.backups_dir / f"manual-{datetime.now(UTC):%Y%m%dT%H%M%S}-{record.id[:8]}.notebuddy.zip"
     try:
-        manifest = create_backup_archive(settings.data_dir, destination)
+        manifest = create_backup_archive(settings.data_dir, destination, course_id=payload.course_id)
         record.path = str(destination)
         record.status = "completed"
-        record.manifest_json = __import__("json").dumps(manifest, ensure_ascii=False)
+        record.manifest_json = json.dumps(manifest, ensure_ascii=False)
         record.completed_at = datetime.now(UTC)
     except Exception as exc:
         record.status = "failed"
@@ -66,7 +67,7 @@ def preview_backup_upload(file: UploadFile = File(...)) -> dict:
     path = _temporary_upload(file)
     try:
         try:
-            return preview_backup(path)
+            return preview_backup(path, current_database=settings.data_dir / "notebook.sqlite3")
         except Exception as exc:
             return {"valid": False, "errors": [str(exc)], "conflicts": []}
     finally:
@@ -74,7 +75,13 @@ def preview_backup_upload(file: UploadFile = File(...)) -> dict:
 
 
 @router.post("/backups/restore", response_model=BackupRecordRead, status_code=202)
-def restore_backup_upload(file: UploadFile = File(...), db: Session = Depends(get_db)) -> BackupRecord:
+def restore_backup_upload(
+    file: UploadFile = File(...),
+    confirmed: bool = Form(False),
+    db: Session = Depends(get_db),
+) -> BackupRecord:
+    if not confirmed:
+        raise HTTPException(status_code=400, detail="请先完成备份预览并确认恢复")
     path = _temporary_upload(file)
     record = BackupRecord(action="restore", status="processing")
     db.add(record)
@@ -85,7 +92,7 @@ def restore_backup_upload(file: UploadFile = File(...), db: Session = Depends(ge
         manifest = restore_backup_to_empty(path, destination)
         record.path = str(destination)
         record.status = "validated_to_isolated_directory"
-        record.manifest_json = __import__("json").dumps(manifest, ensure_ascii=False)
+        record.manifest_json = json.dumps(manifest, ensure_ascii=False)
         record.completed_at = datetime.now(UTC)
     except Exception as exc:
         record.status = "failed"
