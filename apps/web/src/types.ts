@@ -5,6 +5,14 @@ export type Course = {
   created_at: string
 }
 
+export type CourseDeleteResponse = {
+  deleted_course_id: string
+  deleted_materials: number
+  deleted_pages: number
+  deleted_knowledge_nodes: number
+  deleted_notes: number
+}
+
 export type Material = {
   id: string
   course_id: string
@@ -90,4 +98,53 @@ export type KnowledgeEdge = {
 export type KnowledgeGraph = {
   nodes: KnowledgeNode[]
   edges: KnowledgeEdge[]
+}
+
+export type DeepSeekStatus = {
+  configured: boolean
+  masked_key: string | null
+  base_url: string
+  model: string
+  timeout_seconds: number
+}
+
+export type EmbeddingStatus = {
+  configured: boolean
+  masked_key: string | null
+  base_url: string | null
+  model: string | null
+}
+
+export type StorageStatus = {
+  data_dir: string
+  database: string
+  max_upload_mb: number
+}
+
+export type LimitsStatus = {
+  allowed_extensions: string[]
+  editable_keys: string[]
+  secret_write_enabled: boolean
+  token_required: boolean
+}
+
+export type SettingsSource = {
+  env_path: string
+  env_exists: boolean
+  override_keys: string[]
+}
+
+export type SettingsStatus = {
+  deepseek: DeepSeekStatus
+  embedding: EmbeddingStatus
+  storage: StorageStatus
+  limits: LimitsStatus
+  source: SettingsSource
+}
+
+export type SettingsUpdateResponse = {
+  updated: string[]
+  backup_path: string | null
+  status: SettingsStatus
+  warnings: string[]
 }

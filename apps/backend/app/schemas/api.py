@@ -10,6 +10,22 @@ class CourseCreate(BaseModel):
     description: str | None = Field(default=None, max_length=2000)
 
 
+class CourseUpdate(BaseModel):
+    """课程重命名。only name 允许修改，避免误改关联数据。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=200)
+
+
+class CourseDeleteResponse(BaseModel):
+    deleted_course_id: str
+    deleted_materials: int
+    deleted_pages: int
+    deleted_knowledge_nodes: int
+    deleted_notes: int
+
+
 class CourseRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -148,3 +164,71 @@ class AssistantResponse(BaseModel):
     answer: str
     sources: list[AssistantSource]
     mode: str = "local-retrieval-preview"
+
+
+class DeepSeekStatus(BaseModel):
+    configured: bool
+    masked_key: str | None
+    base_url: str
+    model: str
+    timeout_seconds: float
+
+
+class EmbeddingStatus(BaseModel):
+    configured: bool
+    masked_key: str | None
+    base_url: str | None
+    model: str | None
+
+
+class StorageStatus(BaseModel):
+    data_dir: str
+    database: str
+    max_upload_mb: int
+
+
+class LimitsStatus(BaseModel):
+    allowed_extensions: list[str]
+    editable_keys: list[str]
+    secret_write_enabled: bool
+    token_required: bool
+
+
+class SettingsSource(BaseModel):
+    env_path: str
+    env_exists: bool
+    override_keys: list[str]
+
+
+class SettingsStatus(BaseModel):
+    deepseek: DeepSeekStatus
+    embedding: EmbeddingStatus
+    storage: StorageStatus
+    limits: LimitsStatus
+    source: SettingsSource
+
+
+class SettingsUpdate(BaseModel):
+    """只接受白名单键；未知键会被显式拒绝，不静默丢弃。
+
+    密钥字段（DEEPSEEK_API_KEY / EMBEDDING_API_KEY）虽在 schema 中声明，
+    但真正写入还需通过后端开关 + 口令校验，见 `settings_store.apply_updates`。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    DEEPSEEK_BASE_URL: str | None = None
+    DEEPSEEK_MODEL: str | None = None
+    DEEPSEEK_TIMEOUT_SECONDS: str | None = None
+    EMBEDDING_BASE_URL: str | None = None
+    EMBEDDING_MODEL: str | None = None
+    NOTEBOOK_MAX_UPLOAD_MB: str | None = None
+    DEEPSEEK_API_KEY: str | None = None
+    EMBEDDING_API_KEY: str | None = None
+
+
+class SettingsUpdateResponse(BaseModel):
+    updated: list[str]
+    backup_path: str | None
+    status: SettingsStatus
+    warnings: list[str] = []

@@ -1,11 +1,14 @@
 import type {
   AssistantResponse,
   Course,
+  CourseDeleteResponse,
   KnowledgeGraph,
   Job,
   Material,
   Note,
   Page,
+  SettingsStatus,
+  SettingsUpdateResponse,
   UploadResponse,
 } from './types'
 
@@ -26,6 +29,14 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, description: description || null }),
     }),
+  renameCourse: (courseId: string, name: string) =>
+    request<Course>(`/api/v1/courses/${courseId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    }),
+  deleteCourse: (courseId: string) =>
+    request<CourseDeleteResponse>(`/api/v1/courses/${courseId}`, { method: 'DELETE' }),
   listMaterials: (courseId: string) => request<Material[]>(`/api/v1/courses/${courseId}/materials`),
   uploadMaterial: (courseId: string, file: File, lectureTitle: string) => {
     const form = new FormData()
@@ -55,5 +66,15 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, material_id: materialId, page_number: pageNumber }),
+    }),
+  getSettings: () => request<SettingsStatus>('/api/v1/settings'),
+  updateSettings: (updates: Record<string, string>, token?: string) =>
+    request<SettingsUpdateResponse>('/api/v1/settings', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'X-Notebook-Settings-Token': token } : {}),
+      },
+      body: JSON.stringify(updates),
     }),
 }
