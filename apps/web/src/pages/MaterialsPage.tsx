@@ -1,8 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { api } from '../api'
 import { EmptyState } from '../components/EmptyState'
+import { CoverageGrid } from '../components/CoverageGrid'
 import { ProcessingStatus } from '../components/ProcessingStatus'
 import { useWorkspace } from '../components/AppLayout'
+import type { Capabilities } from '../api/config'
+import type { Coverage, PageEvidence } from '../types'
 
 const statusLabels: Record<string, string> = { pending: '等待处理', processing: '解析中', completed: '已完成', failed: '解析失败' }
 
@@ -20,6 +23,8 @@ export function MaterialsPage() {
     busy,
     uploadMaterial,
     retryMaterial,
+    reparseMaterial,
+    requestOCR,
     refreshCurrentMaterials,
   } = useWorkspace()
   const [file, setFile] = useState<File>()
@@ -29,6 +34,15 @@ export function MaterialsPage() {
   const [webSources, setWebSources] = useState<import('../types').WebSource[]>([])
   const [deletedMaterials, setDeletedMaterials] = useState<import('../types').Material[]>([])
   const [materialActionError, setMaterialActionError] = useState<string>()
+  const [coverage, setCoverage] = useState<Coverage>()
+  const [pageEvidence, setPageEvidence] = useState<PageEvidence>()
+  const [capabilities, setCapabilities] = useState<Capabilities>()
+
+  useEffect(() => {
+    let active = true
+    void api.getCapabilities().then((value) => { if (active) setCapabilities(value) }).catch(() => { if (active) setCapabilities(undefined) })
+    return () => { active = false }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -71,22 +85,30 @@ export function MaterialsPage() {
     if (!selectedMaterialId) { setWebSources([]); return }
     let active = true
     void api.listMaterialWebSources(selectedMaterialId).then((items) => { if (active) setWebSources(items) }).catch(() => { if (active) setWebSources([]) })
+    void api.getCoverage(selectedMaterialId).then((value) => { if (active) setCoverage(value) }).catch(() => { if (active) setCoverage(undefined) })
     return () => { active = false }
   }, [selectedMaterialId])
+
+  useEffect(() => {
+    if (!selectedMaterialId || selectedPageNumber === undefined) { setPageEvidence(undefined); return }
+    let active = true
+    void api.getPageEvidence(selectedMaterialId, selectedPageNumber).then((value) => { if (active) setPageEvidence(value) }).catch(() => { if (active) setPageEvidence(undefined) })
+    return () => { active = false }
+  }, [selectedMaterialId, selectedPageNumber])
 
   return (
     <div className="feature-page page-enter">
       <header className="page-heading-block compact-heading">
-        <div><span className="eyebrow">{course?.name ?? '当前课程'}</span><h1>课程资料</h1><p>上传 PPTX 课件，检查解析状态与逐页内容。</p></div>
+        <div><span className="eyebrow">{course?.name ?? '当前课程'}</span><h1>课程资料</h1><p>上传支持的课件格式，检查解析状态、位置证据与来源覆盖。</p></div>
         <span className="page-count-pill">{materials.length} 份资料</span>
       </header>
 
       <form className="material-upload-card" onSubmit={(event) => void handleUpload(event)}>
-        <div className="upload-card-heading"><span className="upload-card-icon">＋</span><div><h2>上传一份课程资料</h2><p>支持 PPTX、PDF、DOCX，单文件上限由后端配置提供。</p></div></div>
+        <div className="upload-card-heading"><span className="upload-card-icon">＋</span><div><h2>上传一份课程资料</h2><p>支持 {(capabilities?.allowed_extensions ?? ['.pptx', '.pdf', '.docx']).join('、')}，单文件上限 {capabilities ? `${Math.round(capabilities.max_upload_bytes / 1024 / 1024)} MB` : '由后端配置'}，最多 {capabilities?.max_pages ?? 500} 个位置。</p><small>{capabilities?.ocr.status === 'ready' ? `OCR 已启用，单次最多 ${capabilities.ocr.max_pages} 页` : 'OCR 未启用；扫描页会保留为待检查位置，不生成伪文本。'}</small></div></div>
         <div className="material-upload-fields">
           <label>章节 / 主题（可选）<input value={topicTitle} onChange={(event) => setTopicTitle(event.target.value)} maxLength={200} placeholder="例如：第一章 · 软件生命周期" /></label>
           <label>讲次名称<input value={lectureTitle} onChange={(event) => setLectureTitle(event.target.value)} maxLength={200} placeholder="例如：第 1 讲 · 软件生命周期" /></label>
-          <label className="material-file-field">选择课件<input type="file" accept=".pptx,.pdf,.docx" onChange={(event) => setFile(event.target.files?.[0])} /></label>
+          <label className="material-file-field">选择课件<input type="file" accept={(capabilities?.allowed_extensions ?? ['.pptx', '.pdf', '.docx']).join(',')} onChange={(event) => setFile(event.target.files?.[0])} /></label>
           <label><input type="checkbox" checked={allowDuplicate} onChange={(event) => setAllowDuplicate(event.target.checked)} />相同文件作为新讲次导入</label>
           <button className="primary-button" type="submit" disabled={!file || busy}>{busy ? '上传中…' : '上传并解析'}</button>
         </div>
@@ -99,7 +121,7 @@ export function MaterialsPage() {
       <section className="materials-list-section">
         <div className="section-heading-row"><div><span className="eyebrow">当前课程</span><h2>已上传资料</h2></div></div>
         {courseContentLoading ? <div className="page-loading" role="status">正在读取课程资料…</div> : materials.length === 0 ? (
-          <EmptyState icon="▱" title="还没有课程资料" description="选择 PPTX 上传后，解析状态和课件页面会显示在这里。" />
+          <EmptyState icon="▱" title="还没有课程资料" description="选择 PPTX、PDF 或 DOCX 上传后，解析状态和课件位置会显示在这里。" />
         ) : (
           <div className="materials-browser">
             <div className="materials-list" aria-label="课程资料列表">
@@ -111,6 +133,7 @@ export function MaterialsPage() {
                     <span className={`status-pill status-pill-${material.status}`}>{statusLabels[material.status] ?? material.status}</span>
                   </button>
                   {material.status === 'failed' && <button className="material-retry-action" onClick={() => void retryMaterial(material.id)}>重试解析</button>}
+                  {material.status === 'completed' && <button className="material-retry-action" onClick={() => void reparseMaterial(material.id)}>重新解析</button>}
                   {(material.status === 'completed' || material.status === 'failed') && <button className="text-button" onClick={() => void deleteMaterial(material.id)}>移除资料</button>}
                 </div>
               ))}
@@ -132,7 +155,8 @@ export function MaterialsPage() {
                   ))}
                 </div>
               )}
-              {selectedPage && <article className="material-page-detail"><span className="eyebrow">{selectedPage.location_label || `第 ${selectedPage.page_number} 页`} · {selectedPage.extraction_method}</span><h3>{selectedPage.title || '未识别标题'}</h3><p>{selectedPage.raw_text || '本位置没有可展示的文本。'}</p>{selectedPage.warning && <small className="form-error">{selectedPage.warning}</small>}</article>}
+              {selectedPage && <article className="material-page-detail"><span className="eyebrow">{selectedPage.location_label || `第 ${selectedPage.page_number} 页`} · {selectedPage.extraction_method}</span><h3>{selectedPage.title || '未识别标题'}</h3><p>{selectedPage.raw_text || '本位置没有可展示的文本。'}</p>{selectedPage.warning && <small className="form-error">{selectedPage.warning}</small>}{selectedPage.parse_status === 'ocr_candidate' && <button className="secondary-button" type="button" onClick={() => void requestOCR(selectedMaterialId!)}>请求 OCR</button>}{pageEvidence?.blocks.length ? <div className="page-block-list" aria-label="页面结构化块">{pageEvidence.blocks.map((block) => <div className="page-block-item" key={block.id}><strong>{block.block_type} · {block.location_label || `块 ${block.position + 1}`} · {block.extraction_method}</strong><small>{block.content || block.warning || '该对象没有可展示文本。'}</small>{block.note_titles.length > 0 && <small>关联笔记：{block.note_titles.join('、')}</small>}</div>)}</div> : null}{pageEvidence?.note_titles.length ? <small className="evidence-empty">本位置关联笔记：{pageEvidence.note_titles.join('、')}</small> : null}</article>}
+              <CoverageGrid coverage={coverage} onOpenPage={setSelectedPageNumber} />
               {selectedMaterialId && <section className="material-web-sources"><div className="panel-heading"><strong>联网补充来源</strong><span>{webSources.length}</span></div>{webSources.length ? <div className="source-card-list">{webSources.map((source) => <a className="source-card" key={source.id} href={source.url} target="_blank" rel="noreferrer"><span className="source-card-icon">↗</span><span className="source-card-body"><small className="source-card-meta">{source.site_name} · 检索于 {new Date(source.retrieved_at).toLocaleDateString('zh-CN')}</small><strong>{source.title}</strong><small>{source.snippet}</small></span></a>)}</div> : <p className="evidence-empty">此资料没有已保存的联网补充来源。搜索未配置或未找到可靠结果时不会显示虚构来源。</p>}</section>}
             </div>
           </div>

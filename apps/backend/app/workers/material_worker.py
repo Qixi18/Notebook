@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.db.database import SessionLocal
@@ -17,7 +19,9 @@ from app.db.models import (
 )
 from app.knowledge.extractor import extract_material_knowledge
 from app.parsers.document import parse_document
+from app.parsers.ocr import ocr_pdf_page
 from app.retrieval.service import index_material
+from app.services.sources import mark_pages_stale
 from app.web_search.tavily import WebSearchError
 from app.web_search.tavily import configured as web_search_configured
 from app.web_search.tavily import search as web_search
@@ -43,12 +47,35 @@ def process_material(job_id: str) -> None:
         if source_path.suffix.lower() not in settings.allowed_extensions:
             raise ValueError("该资料格式未启用解析器")
 
-        # A retry after knowledge/index failure reuses committed pages and
-        # their SourceRef IDs. Replacing them would destroy note provenance.
-        if not material.pages or material.page_count != len(material.pages):
-            parsed_document = parse_document(source_path)
+        active_pages = [page for page in material.pages if page.is_active]
+        if job.kind == "ocr_material":
+            if source_path.suffix.lower() != ".pdf":
+                raise ValueError("当前只有 PDF 扫描页支持 OCR 任务")
+            _run_ocr(db, job, material, source_path)
+            should_parse = False
+        else:
+            should_parse = (
+                job.kind == "reparse_material"
+                or not active_pages
+                or material.page_count != len(active_pages)
+            )
+        # A retry after knowledge/index failure reuses committed pages. A
+        # deliberate reparse creates a new active version and keeps old pages
+        # and sources as stale evidence for audit and user review.
+        if should_parse:
+            parsed_document = replace(
+                parse_document(source_path),
+                material_id=material.id,
+                file_hash=material.content_hash,
+            )
             parsed_pages = parsed_document.pages
-            material.pages.clear()
+            if not parsed_pages:
+                raise ValueError("资料没有可用的页面或章节")
+            if len(parsed_pages) > settings.max_pages:
+                raise ValueError(f"资料位置数超过本地限制（最多 {settings.max_pages} 个）")
+            mark_pages_stale(db, active_pages)
+            for old_page in active_pages:
+                old_page.is_active = False
             material.page_count = len(parsed_pages)
             material.parser_version = parsed_document.parser_version
             material.document_warning = "；".join(parsed_document.warnings) or None
@@ -65,6 +92,7 @@ def process_material(job_id: str) -> None:
                     stable_location_key=parsed_page.stable_location_key,
                     extraction_method=parsed_page.extraction_method,
                     confidence=parsed_page.confidence,
+                    is_active=True,
                 )
                 db.add(page)
                 db.flush()
@@ -106,7 +134,12 @@ def process_material(job_id: str) -> None:
                 .join(KnowledgeNode.source_refs)
                 .join(SourceRef.page_block)
                 .join(PageBlock.page)
-                .where(KnowledgeNode.course_id == material.course_id, MaterialPage.material_id == material.id)
+                .where(
+                    KnowledgeNode.course_id == material.course_id,
+                    MaterialPage.material_id == material.id,
+                    MaterialPage.is_active.is_(True),
+                    SourceRef.status == "active",
+                )
             ).all())
             found = 0
             try:
@@ -156,10 +189,79 @@ def process_material(job_id: str) -> None:
             job.finished_at = datetime.now(UTC)
             job.progress = 0
             if job.material is not None:
-                job.material.status = "failed"
+                # An OCR failure must leave the already parsed material
+                # browseable; the OCR job itself carries the actionable error.
+                job.material.status = (
+                    "completed" if job.kind == "ocr_material" and job.material.page_count else "failed"
+                )
+            if job.kind == "ocr_material":
+                job.error_code = "ocr_failed"
             db.commit()
     finally:
         db.close()
+
+
+def _run_ocr(db, job: ProcessingJob, material, source_path) -> None:
+    job.phase = "ocr"
+    job.progress = 5
+    job.heartbeat_at = datetime.now(UTC)
+    db.commit()
+    pages = list(db.scalars(
+        select(MaterialPage)
+        .where(
+            MaterialPage.material_id == material.id,
+            MaterialPage.is_active.is_(True),
+            MaterialPage.parse_status == "ocr_candidate",
+        )
+        .options(selectinload(MaterialPage.blocks))
+        .order_by(MaterialPage.page_number)
+    ).all())
+    if not pages:
+        raise ValueError("当前资料没有待 OCR 的位置")
+
+    for index, page in enumerate(pages, start=1):
+        mark_pages_stale(db, [page])
+        text, method, confidence = ocr_pdf_page(
+            source_path, page_number=page.page_number
+        )
+        if text:
+            page.raw_text = text
+            page.title = text.splitlines()[0][:500]
+            page.parse_status = "parsed"
+            page.warning = "OCR 识别结果；请人工核对原始页面"
+            page.extraction_method = method
+            page.confidence = confidence
+            text_block = next((block for block in page.blocks if not block.content.strip()), None)
+            if text_block is None:
+                text_block = PageBlock(
+                    page_id=page.id,
+                    block_type="text",
+                    content=text,
+                    position=0,
+                    object_id=f"ocr-page-{page.page_number}",
+                    location_label=page.location_label,
+                )
+                db.add(text_block)
+            else:
+                text_block.content = text
+                text_block.extraction_method = method
+                text_block.confidence = confidence
+                text_block.warning = "OCR 识别结果；请人工核对原始页面"
+        else:
+            page.warning = "OCR 未识别到文字；当前仍没有可引用的原文"
+            page.extraction_method = method
+            page.confidence = confidence
+        job.progress = max(5, int(index / len(pages) * 95))
+        job.heartbeat_at = datetime.now(UTC)
+    material.parser_version = f"{material.parser_version or 'phase2-1'}+ocr"
+    remaining = db.scalar(select(MaterialPage.id).where(
+        MaterialPage.material_id == material.id,
+        MaterialPage.is_active.is_(True),
+        MaterialPage.parse_status == "ocr_candidate",
+    ).limit(1))
+    if remaining is None:
+        material.document_warning = None
+    db.commit()
 
 
 def append_web_references(db, note, sources: list[WebSource]) -> None:

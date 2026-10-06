@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.v1.shared import ensure_course, ensure_material
 from app.core.config import settings
@@ -10,14 +10,19 @@ from app.db.database import get_db
 from app.db.models import (
     Material,
     MaterialPage,
+    PageBlock,
     ProcessingJob,
+    SourceRef,
     WebSource,
 )
+from app.parsers.ocr import status as ocr_status
 from app.schemas.api import (
+    BlockRead,
     CoverageRead,
     DeletionPreview,
     JobRead,
     MaterialRead,
+    PageEvidenceRead,
     PageRead,
     UploadMaterialResponse,
     WebSourceRead,
@@ -126,6 +131,67 @@ def retry_material(material_id: str, db: Session = Depends(get_db)) -> Processin
     return job
 
 
+@router.post("/materials/{material_id}/reparse", response_model=JobRead, status_code=202)
+def reparse_material(material_id: str, db: Session = Depends(get_db)) -> ProcessingJob:
+    material = ensure_material(db, material_id)
+    active_job = db.scalar(
+        select(ProcessingJob)
+        .where(
+            ProcessingJob.material_id == material_id,
+            ProcessingJob.status.in_(["pending", "processing"]),
+        )
+        .limit(1)
+    )
+    if active_job is not None:
+        raise HTTPException(status_code=409, detail="资料已有正在处理的任务")
+    if not (settings.originals_dir / material.stored_filename).is_file():
+        raise HTTPException(status_code=410, detail="原始课件文件不存在，请重新上传")
+    material.status = "pending"
+    job = ProcessingJob(material_id=material.id, kind="reparse_material")
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@router.post("/materials/{material_id}/ocr", response_model=JobRead, status_code=202)
+def request_material_ocr(material_id: str, db: Session = Depends(get_db)) -> ProcessingJob:
+    material = ensure_material(db, material_id)
+    capability = ocr_status()
+    if capability["status"] != "ready":
+        raise HTTPException(
+            status_code=501,
+            detail="OCR 当前不可用：请启用 NOTEBOOK_OCR_ENABLED，并安装 Tesseract、PyMuPDF 及其语言包。",
+        )
+    active_job = db.scalar(
+        select(ProcessingJob)
+        .where(
+            ProcessingJob.material_id == material_id,
+            ProcessingJob.status.in_(["pending", "processing"]),
+        )
+        .limit(1)
+    )
+    if active_job is not None:
+        raise HTTPException(status_code=409, detail="资料已有正在处理的任务")
+    candidate = db.scalar(
+        select(MaterialPage.id)
+        .where(
+            MaterialPage.material_id == material_id,
+            MaterialPage.is_active.is_(True),
+            MaterialPage.parse_status == "ocr_candidate",
+        )
+        .limit(1)
+    )
+    if candidate is None:
+        raise HTTPException(status_code=409, detail="当前资料没有待 OCR 的位置")
+    material.status = "pending"
+    job = ProcessingJob(material_id=material.id, kind="ocr_material")
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
 
 @router.get("/materials/{material_id}/pages", response_model=list[PageRead])
 def list_material_pages(material_id: str, db: Session = Depends(get_db)) -> list[MaterialPage]:
@@ -133,9 +199,80 @@ def list_material_pages(material_id: str, db: Session = Depends(get_db)) -> list
     return list(
         db.scalars(
             select(MaterialPage)
-            .where(MaterialPage.material_id == material_id)
+            .where(MaterialPage.material_id == material_id, MaterialPage.is_active.is_(True))
             .order_by(MaterialPage.page_number)
         ).all()
+    )
+
+
+@router.get(
+    "/materials/{material_id}/pages/{page_number}/evidence",
+    response_model=PageEvidenceRead,
+)
+def get_page_evidence(
+    material_id: str, page_number: int, db: Session = Depends(get_db)
+) -> PageEvidenceRead:
+    ensure_material(db, material_id)
+    page = db.scalar(
+        select(MaterialPage)
+        .where(
+            MaterialPage.material_id == material_id,
+            MaterialPage.page_number == page_number,
+            MaterialPage.is_active.is_(True),
+        )
+        .options(
+            selectinload(MaterialPage.blocks)
+            .selectinload(PageBlock.source_refs)
+            .selectinload(SourceRef.notes)
+        )
+    )
+    if page is None:
+        raise HTTPException(status_code=404, detail="资料位置不存在")
+
+    all_note_ids: set[str] = set()
+    all_note_titles: dict[str, str] = {}
+    blocks: list[BlockRead] = []
+    for block in sorted(page.blocks, key=lambda item: item.position):
+        block_note_titles: dict[str, str] = {}
+        for source_ref in block.source_refs:
+            if source_ref.status != "active":
+                continue
+            for note in source_ref.notes:
+                block_note_titles[note.id] = note.title
+        all_note_ids.update(block_note_titles)
+        all_note_titles.update(block_note_titles)
+        blocks.append(BlockRead(
+            id=block.id,
+            page_id=block.page_id,
+            block_type=block.block_type,
+            content=block.content,
+            position=block.position,
+            font_size=block.font_size,
+            is_bold=block.is_bold,
+            object_id=block.object_id,
+            location_label=block.location_label,
+            extraction_method=block.extraction_method,
+            confidence=block.confidence,
+            warning=block.warning,
+            note_ids=sorted(block_note_titles),
+            note_titles=[block_note_titles[key] for key in sorted(block_note_titles)],
+        ))
+    return PageEvidenceRead(
+        id=page.id,
+        material_id=page.material_id,
+        page_number=page.page_number,
+        title=page.title,
+        raw_text=page.raw_text,
+        parse_status=page.parse_status,
+        warning=page.warning,
+        location_type=page.location_type,
+        location_label=page.location_label,
+        stable_location_key=page.stable_location_key,
+        extraction_method=page.extraction_method,
+        confidence=page.confidence,
+        blocks=blocks,
+        note_ids=sorted(all_note_ids),
+        note_titles=[all_note_titles[key] for key in sorted(all_note_titles)],
     )
 
 

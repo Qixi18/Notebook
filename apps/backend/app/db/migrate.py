@@ -27,7 +27,7 @@ PHASE_ONE_COLUMNS = {
 }
 PHASE_TWO_COLUMNS = {
     "materials": {"parser_version", "document_warning"},
-    "material_pages": {"location_type", "location_label", "stable_location_key", "extraction_method", "confidence"},
+    "material_pages": {"location_type", "location_label", "stable_location_key", "extraction_method", "confidence", "is_active"},
     "page_blocks": {"object_id", "location_label", "extraction_method", "confidence", "warning"},
     "source_refs": {"status", "target_label", "parser_version"},
 }

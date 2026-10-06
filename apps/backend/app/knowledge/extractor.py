@@ -28,17 +28,23 @@ def extract_material_knowledge(db: Session, material_id: str) -> list[KnowledgeN
     material = db.scalar(
         select(Material)
         .where(Material.id == material_id)
-        .options(selectinload(Material.pages).selectinload(MaterialPage.blocks))
     )
     if material is None:
         return []
 
+    pages = list(db.scalars(
+        select(MaterialPage)
+        .where(MaterialPage.material_id == material_id, MaterialPage.is_active.is_(True))
+        .options(selectinload(MaterialPage.blocks))
+        .order_by(MaterialPage.page_number, MaterialPage.id)
+    ).all())
+
     created_or_updated: list[KnowledgeNode] = []
-    for page in sorted(material.pages, key=lambda item: item.page_number):
+    for page in pages:
         if not page.raw_text.strip():
             continue
 
-        source_refs = ensure_source_refs(db, page.blocks)
+        source_refs = ensure_source_refs(db, page.blocks, parser_version=material.parser_version)
         draft = extract_page_draft(page.title or f"第 {page.page_number} 页", page.raw_text)
         title = clean_title(str(draft.get("title") or page.title or f"第 {page.page_number} 页"))
         node = db.scalar(
@@ -69,13 +75,18 @@ def extract_material_knowledge(db: Session, material_id: str) -> list[KnowledgeN
     return created_or_updated
 
 
-def ensure_source_refs(db: Session, blocks: Iterable[PageBlock]) -> list[SourceRef]:
+def ensure_source_refs(
+    db: Session, blocks: Iterable[PageBlock], *, parser_version: str | None = None
+) -> list[SourceRef]:
     refs: list[SourceRef] = []
     for block in blocks:
+        if not block.content.strip():
+            continue
         source_ref = db.scalar(
             select(SourceRef).where(
                 SourceRef.page_block_id == block.id,
                 SourceRef.source_type == "course_material",
+                SourceRef.status == "active",
             )
         )
         if source_ref is None:
@@ -84,7 +95,7 @@ def ensure_source_refs(db: Session, blocks: Iterable[PageBlock]) -> list[SourceR
                 source_type="course_material",
                 quote=block.content[:1000],
                 target_label=block.location_label or block.page.location_label,
-                parser_version=block.page.material.parser_version if block.page.material else None,
+                parser_version=parser_version,
             )
             db.add(source_ref)
             db.flush()

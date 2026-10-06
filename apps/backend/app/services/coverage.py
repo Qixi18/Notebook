@@ -11,7 +11,7 @@ from app.db.models import MaterialPage, PageBlock, SourceRef
 def material_coverage(db: Session, material_id: str) -> dict:
     pages = list(db.scalars(
         select(MaterialPage)
-        .where(MaterialPage.material_id == material_id)
+        .where(MaterialPage.material_id == material_id, MaterialPage.is_active.is_(True))
         .options(selectinload(MaterialPage.blocks).selectinload(PageBlock.source_refs).selectinload(SourceRef.notes))
         .order_by(MaterialPage.page_number, MaterialPage.id)
     ).all())

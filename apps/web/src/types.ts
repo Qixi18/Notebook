@@ -17,6 +17,8 @@ export type Material = {
   status: string
   page_count: number
   created_at: string
+  parser_version?: string | null
+  document_warning?: string | null
   deleted_at?: string | null
 }
 
@@ -61,6 +63,29 @@ export type Page = {
   stable_location_key: string | null
   extraction_method: string
   confidence: number | null
+}
+
+export type PageBlock = {
+  id: string
+  page_id: string
+  block_type: string
+  content: string
+  position: number
+  font_size: number | null
+  is_bold: boolean
+  object_id: string | null
+  location_label: string | null
+  extraction_method: string
+  confidence: number | null
+  warning: string | null
+  note_ids: string[]
+  note_titles: string[]
+}
+
+export type PageEvidence = Page & {
+  blocks: PageBlock[]
+  note_ids: string[]
+  note_titles: string[]
 }
 
 export type CoverageLocation = {

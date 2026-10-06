@@ -35,14 +35,20 @@ def impact_preview(db: Session, *, course_id: str, material_id: str | None = Non
     material_ids = [material_id] if material_id else _material_ids(db, course_id)
     materials = list(db.scalars(select(Material).where(Material.id.in_(material_ids))).all()) if material_ids else []
     pages = db.scalar(select(func.count(MaterialPage.id)).where(
-        MaterialPage.material_id.in_(material_ids)
+        MaterialPage.material_id.in_(material_ids), MaterialPage.is_active.is_(True)
     )) if material_ids else 0
     refs = db.scalar(select(func.count(SourceRef.id)).join(PageBlock).join(MaterialPage).where(
-        MaterialPage.material_id.in_(material_ids)
+        MaterialPage.material_id.in_(material_ids),
+        MaterialPage.is_active.is_(True),
+        SourceRef.status == "active",
     )) if material_ids else 0
     node_ids = list(db.scalars(select(KnowledgeNode.id).distinct()
         .join(KnowledgeNode.source_refs).join(SourceRef.page_block).join(PageBlock.page)
-        .where(MaterialPage.material_id.in_(material_ids))).all()) if material_ids else []
+        .where(
+            MaterialPage.material_id.in_(material_ids),
+            MaterialPage.is_active.is_(True),
+            SourceRef.status == "active",
+        )).all()) if material_ids else []
     locked = db.scalar(select(func.count(Note.id)).where(
         Note.knowledge_node_id.in_(node_ids), Note.user_locked.is_(True)
     )) if node_ids else 0

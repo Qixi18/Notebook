@@ -58,6 +58,7 @@ def get_knowledge_graph(course_id: str, db: Session = Depends(get_db)) -> Knowle
                         page_number=source.page_block.page.page_number,
                     )
                     for source in node.source_refs
+                    if source.status == "active" and source.page_block.page.is_active
                 ],
             )
             for node in nodes

@@ -22,8 +22,12 @@
 | 能力 | 接口 | 行为 |
 |---|---|---|
 | 多格式上传 | `POST /courses/{course_id}/materials` | 接受 `.pptx`、`.pdf`、`.docx`；扩展名和容器结构都会校验，解析仍由本地持久化任务异步执行 |
+| 能力与 OCR 状态 | `GET /config/capabilities`、`GET /ocr/status` | 返回后端真实支持的扩展名、上传/位置上限和 OCR 是否启用；前端据此显示限制 |
 | 资料页面位置 | `GET /materials/{material_id}/pages` | 返回 `location_type`、`location_label`、`stable_location_key`、`extraction_method`、`confidence` 和告警；旧 `page_number` 字段继续保留 |
+| 页面块级证据 | `GET /materials/{material_id}/pages/{page_number}/evidence` | 返回页面块、对象位置、提取方式、告警及当前有效关联笔记 |
 | 资料来源覆盖 | `GET /materials/{material_id}/coverage` | 返回资料位置总数、已被有效来源引用的位置数、待检查位置数、位置明细和关联笔记 |
 | 笔记来源定位 | `GET /notes/{note_id}/sources`、`GET /sources/{source_ref_id}` | 返回课件位置、来源状态和目标标签；来源状态不是 `active` 时，前端显示待核对提示 |
+| 重新解析 | `POST /materials/{material_id}/reparse` | 沿用持久化任务；新解析版本成为活动页面，旧页面和来源保留并标记 `stale`，覆盖只统计活动版本 |
+| 请求 OCR | `POST /materials/{material_id}/ocr` | 对活动 PDF 扫描候选页启动受限 OCR 任务；未启用或缺少 Tesseract/PyMuPDF 时返回明确的 `501`，不改变原有可浏览页面 |
 
 扫描型 PDF 没有文字层时只记录 OCR 候选和待检查告警，不生成伪造的文本或来源。OCR 是独立的可选适配器，受 `NOTEBOOK_OCR_ENABLED`、`NOTEBOOK_OCR_MAX_PAGES` 和 `NOTEBOOK_OCR_LANGUAGE` 控制。

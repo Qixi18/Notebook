@@ -54,6 +54,8 @@ export type WorkspaceContextValue = {
   createCourse: (name: string) => Promise<Course>
   uploadMaterial: (file: File, lectureTitle: string, topicTitle?: string, allowDuplicate?: boolean) => Promise<void>
   retryMaterial: (materialId: string) => Promise<void>
+  reparseMaterial: (materialId: string) => Promise<void>
+  requestOCR: (materialId: string) => Promise<void>
   saveNote: () => Promise<void>
   messages: ChatMessage[]
   question: string

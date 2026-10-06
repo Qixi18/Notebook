@@ -128,6 +128,7 @@ class MaterialPage(Base):
     stable_location_key: Mapped[str | None] = mapped_column(String(300), nullable=True)
     extraction_method: Mapped[str] = mapped_column(String(40), default="native_text", nullable=False)
     confidence: Mapped[float | None] = mapped_column(nullable=True)
+    is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
 
     material: Mapped[Material] = relationship(back_populates="pages")
     blocks: Mapped[list[PageBlock]] = relationship(

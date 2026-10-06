@@ -81,6 +81,10 @@ def test_pdf_upload_reaches_persistent_queue(tmp_path, monkeypatch):
     app.dependency_overrides[get_db] = override_db
     try:
         client = TestClient(app)
+        capabilities = client.get("/api/v1/config/capabilities")
+        assert capabilities.status_code == 200
+        assert ".pdf" in capabilities.json()["allowed_extensions"]
+        assert capabilities.json()["ocr"]["status"] in {"disabled", "missing_dependency", "ready"}
         course = client.post("/api/v1/courses", json={"name": "PDF 课程"}).json()
         path = tmp_path / "empty.pdf"
         writer = PdfWriter()
@@ -94,6 +98,12 @@ def test_pdf_upload_reaches_persistent_queue(tmp_path, monkeypatch):
         )
         assert response.status_code == 201, response.text
         assert response.json()["material"]["original_filename"] == "empty.pdf"
+        rejected = client.post(
+            f"/api/v1/courses/{course['id']}/materials",
+            files={"file": ("fake.pdf", b"not-a-pdf", "application/pdf")},
+            data={"lecture_title": "损坏文件"},
+        )
+        assert rejected.status_code == 415
     finally:
         app.dependency_overrides.clear()
         engine.dispose()

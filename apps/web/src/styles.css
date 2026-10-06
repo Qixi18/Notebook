@@ -358,6 +358,20 @@ button.source-card:hover { transform: translateY(-1px); border-color: #b9d9ef; b
 .material-page-detail { border-top: 1px solid var(--line); padding: 15px 17px; }
 .material-page-detail h3 { margin-top: 5px; color: #416583; font-size: 12px; }
 .material-page-detail p { margin-top: 8px; color: #788b9c; font-size: 12px; line-height: 1.75; white-space: pre-wrap; }
+.coverage-panel { border-top: 1px solid var(--line); }
+.coverage-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 7px; padding: 12px 17px 17px; }
+.coverage-location { min-width: 0; border: 1px solid #e5edf4; border-radius: 10px; padding: 9px; text-align: left; background: #fbfdff; }
+.coverage-location:hover { border-color: #b9d9ef; background: #f4faff; }
+.coverage-location strong, .coverage-location small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.coverage-location strong { color: #52738b; font-size: 11px; }
+.coverage-location small { margin-top: 4px; color: #8b9cab; font-size: 10px; }
+.coverage-location-cited { border-color: #d7eee3; background: #f8fcfa; }
+.coverage-location-review { border-color: #f0e6ce; background: #fffdf8; }
+.page-block-list { display: grid; gap: 7px; margin-top: 12px; }
+.page-block-item { border: 1px solid #e7eef4; border-radius: 9px; padding: 9px 10px; background: #fbfdff; }
+.page-block-item strong, .page-block-item small { display: block; }
+.page-block-item strong { color: #4e6e87; font-size: 11px; }
+.page-block-item small { margin-top: 5px; color: #8395a5; font-size: 11px; line-height: 1.5; white-space: pre-wrap; }
 .assistant-workspace { display: flex; min-height: min(690px, calc(100vh - 190px)); flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-radius: 17px; background: white; box-shadow: var(--shadow); }
 .assistant-context-bar { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); padding: 13px 17px; }
 .assistant-avatar-small { display: grid; width: 34px; height: 34px; flex: none; place-items: center; border-radius: 12px; color: #4288bd; background: #e9f5fd; }

@@ -37,6 +37,9 @@ def test_isolated_pptx_flow(tmp_path):
             assert client.get(f"/api/v1/jobs/{first['job']['id']}").json()['status'] == 'completed'
             pages = client.get(f"/api/v1/materials/{first['material']['id']}/pages").json()
             assert len(pages) == 1 and '测试知识点' in pages[0]['raw_text']
+            evidence = client.get(f"/api/v1/materials/{first['material']['id']}/pages/1/evidence")
+            assert evidence.status_code == 200, evidence.text
+            assert evidence.json()['blocks'] and evidence.json()['note_titles']
             coverage = client.get(f"/api/v1/materials/{first['material']['id']}/coverage").json()
             assert coverage['total_locations'] == 1
             assert coverage['cited_locations'] == 1
@@ -62,6 +65,14 @@ def test_isolated_pptx_flow(tmp_path):
             protected = client.get(f"/api/v1/notes/{note['id']}").json()
             assert protected['content_markdown'] == '# 我的用户正文'
             assert protected['user_locked']
+            reparsed = client.post(f"/api/v1/materials/{first['material']['id']}/reparse")
+            assert reparsed.status_code == 202, reparsed.text
+            assert run_once()
+            active_pages = client.get(f"/api/v1/materials/{first['material']['id']}/pages").json()
+            assert len(active_pages) == 1 and active_pages[0]['stable_location_key'] == 'slide:1'
+            reparsed_sources = client.get(f"/api/v1/notes/{note['id']}/sources").json()
+            assert {item['status'] for item in reparsed_sources} == {'active', 'stale'}
+            assert client.get(f"/api/v1/materials/{first['material']['id']}/coverage").json()['cited_locations'] == 1
             first_id = first['material']['id']
             preview = client.get(f'/api/v1/materials/{first_id}/deletion-preview').json()
             assert preview['pages'] == 1 and preview['user_notes_protected'] >= 1

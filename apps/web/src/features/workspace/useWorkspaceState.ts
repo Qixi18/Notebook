@@ -187,6 +187,28 @@ export function useWorkspaceState() {
     }
   }
 
+  async function reparseMaterial(materialId: string) {
+    try {
+      setError(undefined)
+      const nextJob = await api.reparseMaterial(materialId)
+      setJob(nextJob)
+      await refreshMaterials(courseId!)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '资料重解析失败')
+    }
+  }
+
+  async function requestOCR(materialId: string) {
+    try {
+      setError(undefined)
+      const nextJob = await api.requestOCR(materialId)
+      setJob(nextJob)
+      await refreshMaterials(courseId!)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'OCR 请求失败')
+    }
+  }
+
   const workspace = useMemo(() => ({
     courses,
     courseId,
@@ -218,6 +240,8 @@ export function useWorkspaceState() {
     createCourse,
     uploadMaterial,
     retryMaterial,
+    reparseMaterial,
+    requestOCR,
     saveNote,
     messages,
     question,
@@ -225,7 +249,7 @@ export function useWorkspaceState() {
     askQuestion,
     refreshCourses,
     refreshCurrentMaterials: () => courseId ? refreshMaterials(courseId) : Promise.resolve(),
-  }), [courses, courseId, course, coursesLoading, courseContentLoading, materials, selectedMaterialId, pages, selectedPageNumber, notes, selectedNote, noteDraft, editingNote, graph, job, busy, assistantBusy, noteSaving, noteDirty, reloadNote, error, createCourse, uploadMaterial, retryMaterial, saveNote, messages, question, askQuestion, refreshCourses])
+  }), [courses, courseId, course, coursesLoading, courseContentLoading, materials, selectedMaterialId, pages, selectedPageNumber, notes, selectedNote, noteDraft, editingNote, graph, job, busy, assistantBusy, noteSaving, noteDirty, reloadNote, error, createCourse, uploadMaterial, retryMaterial, reparseMaterial, requestOCR, saveNote, messages, question, askQuestion, refreshCourses])
 
   return workspace
 }

@@ -29,7 +29,11 @@ def index_material(db: Session, material_id: str) -> None:
         db.scalars(
             select(PageBlock)
             .join(MaterialPage, PageBlock.page_id == MaterialPage.id)
-            .where(MaterialPage.material_id == material_id)
+            .where(
+                MaterialPage.material_id == material_id,
+                MaterialPage.is_active.is_(True),
+                PageBlock.content != "",
+            )
             .order_by(PageBlock.id)
         ).all()
     )
@@ -69,7 +73,12 @@ def retrieve(
         .join(PageBlock, RetrievalChunk.page_block_id == PageBlock.id)
         .join(MaterialPage, PageBlock.page_id == MaterialPage.id)
         .join(Material, MaterialPage.material_id == Material.id)
-        .where(RetrievalChunk.course_id == course_id, Material.deleted_at.is_(None))
+        .where(
+            RetrievalChunk.course_id == course_id,
+            Material.deleted_at.is_(None),
+            MaterialPage.is_active.is_(True),
+            PageBlock.content != "",
+        )
     )
     if material_id:
         query = query.where(Material.id == material_id)

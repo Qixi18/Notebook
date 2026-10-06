@@ -88,7 +88,7 @@ export function CourseOverviewPage() {
         <div>
           <span className="eyebrow">接下来</span>
           <h2>{!latestMaterial ? '上传第一份课程资料' : latestIsReady ? '继续整理这门课程' : latestMaterial.status === 'failed' ? '检查未完成的解析' : '资料正在准备中'}</h2>
-          <p>{latestMaterial ? latestIsReady ? `最近资料“${latestMaterial.lecture_title}”已完成解析，可以继续查看笔记和知识结构。` : `最近资料“${latestMaterial.lecture_title}”当前状态：${materialStatus[latestMaterial.status] ?? latestMaterial.status}。` : '先上传 PPTX 课件，NoteBuddy 会按当前支持的流程解析页面并整理知识点。'}</p>
+          <p>{latestMaterial ? latestIsReady ? `最近资料“${latestMaterial.lecture_title}”已完成解析，可以继续查看笔记和知识结构。` : `最近资料“${latestMaterial.lecture_title}”当前状态：${materialStatus[latestMaterial.status] ?? latestMaterial.status}。` : '先上传 PPTX、PDF 或 DOCX 课件，NoteBuddy 会按当前支持的流程解析位置并整理知识点。'}</p>
         </div>
         <Link className="secondary-button link-button" to={featurePath(courseId, latestIsReady ? 'notes' : 'materials')}>
           {latestIsReady ? '打开笔记' : latestMaterial?.status === 'failed' ? '查看资料状态' : '前往课程资料'}

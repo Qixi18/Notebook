@@ -12,7 +12,9 @@ from app.schemas.knowledge import (
     KnowledgeNodeWithSourcesRead,
 )
 from app.schemas.materials import (
+    BlockRead,
     MaterialRead,
+    PageEvidenceRead,
     PageRead,
     SourceRefRead,
     UploadMaterialResponse,
@@ -20,4 +22,4 @@ from app.schemas.materials import (
 )
 from app.schemas.notes import NoteRead, NoteRevisionRead, NoteUpdate
 
-__all__ = ['AssistantRequest', 'AssistantResponse', 'AssistantSource', 'CourseCreate', 'CourseRead', 'CoverageLocation', 'CoverageRead', 'DeletionPreview', 'JobRead', 'KnowledgeEdgeRead', 'KnowledgeGraphRead', 'KnowledgeNodeRead', 'KnowledgeNodeSourceRead', 'KnowledgeNodeWithSourcesRead', 'MaterialRead', 'NoteRead', 'NoteRevisionRead', 'NoteUpdate', 'PageRead', 'SourceRefRead', 'UploadMaterialResponse', 'WebSourceRead']
+__all__ = ['AssistantRequest', 'AssistantResponse', 'AssistantSource', 'BlockRead', 'CourseCreate', 'CourseRead', 'CoverageLocation', 'CoverageRead', 'DeletionPreview', 'JobRead', 'KnowledgeEdgeRead', 'KnowledgeGraphRead', 'KnowledgeNodeRead', 'KnowledgeNodeSourceRead', 'KnowledgeNodeWithSourcesRead', 'MaterialRead', 'NoteRead', 'NoteRevisionRead', 'NoteUpdate', 'PageEvidenceRead', 'PageRead', 'SourceRefRead', 'UploadMaterialResponse', 'WebSourceRead']

@@ -28,9 +28,11 @@ def _validate_container(path: Path, extension: str) -> None:
                 raise UploadRejected("文件扩展名是 PDF，但文件签名无效", 415)
         try:
             from pypdf import PdfReader
-            PdfReader(str(path))
+            page_count = len(PdfReader(str(path)).pages)
         except Exception as exc:
             raise UploadRejected("PDF 文件损坏或无法读取", 415) from exc
+        if page_count > settings.max_pages:
+            raise UploadRejected(f"PDF 页面数超过本地限制（最多 {settings.max_pages} 页）", 413)
         return
     try:
         with ZipFile(path) as archive:
@@ -38,7 +40,24 @@ def _validate_container(path: Path, extension: str) -> None:
             required = {"ppt/presentation.xml"} if extension == ".pptx" else {"word/document.xml", "[Content_Types].xml"}
             if not required.issubset(names) or archive.testzip() is not None:
                 raise UploadRejected(f"文件不是可读取的 {extension[1:].upper()}", 415)
+        if extension == ".pptx":
+            from pptx import Presentation
+
+            page_count = len(Presentation(str(path)).slides)
+            if page_count > settings.max_pages:
+                raise UploadRejected(f"PPTX 页面数超过本地限制（最多 {settings.max_pages} 页）", 413)
+        elif extension == ".docx":
+            from docx import Document
+
+            document = Document(str(path))
+            position_count = len(document.paragraphs) + len(document.tables)
+            if position_count > settings.max_pages:
+                raise UploadRejected(f"DOCX 章节/位置数超过本地限制（最多 {settings.max_pages} 个）", 413)
+    except UploadRejected:
+        raise
     except BadZipFile as exc:
+        raise UploadRejected(f"文件不是可读取的 {extension[1:].upper()}", 415) from exc
+    except Exception as exc:
         raise UploadRejected(f"文件不是可读取的 {extension[1:].upper()}", 415) from exc
 
 

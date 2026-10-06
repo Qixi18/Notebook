@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import TypedDict
 
 from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 from app.parsers.base import PARSER_VERSION, ParsedDocument
 from app.parsers.base import ParsedBlock as DocumentBlock
@@ -68,6 +69,7 @@ def parse_pptx_document(path: Path) -> ParsedDocument:
 
     for page_number, slide in enumerate(presentation.slides, start=1):
         blocks: list[DocumentBlock] = []
+        page_warnings: list[str] = []
         for position, shape in enumerate(slide.shapes):
             text = getattr(shape, "text", "")
             block_type = "title" if position == 0 else "text"
@@ -76,9 +78,28 @@ def parse_pptx_document(path: Path) -> ParsedDocument:
                 block_type = "table"
                 rows = [" | ".join(cell.text.strip() for cell in row.cells) for row in shape.table.rows]
                 text = "\n".join(row for row in rows if row.strip())
-            elif getattr(shape, "shape_type", None) is not None and not isinstance(text, str):
-                warning = "对象未提取为文本"
+            elif getattr(shape, "shape_type", None) in {
+                MSO_SHAPE_TYPE.PICTURE,
+                MSO_SHAPE_TYPE.GROUP,
+                MSO_SHAPE_TYPE.CHART,
+                MSO_SHAPE_TYPE.TABLE,
+                MSO_SHAPE_TYPE.MEDIA,
+            }:
+                block_type = "image_or_object"
+                warning = "图片、公式或复杂对象未提取为文字；可按需启用 OCR"
             if not isinstance(text, str) or not text.strip():
+                if warning:
+                    blocks.append(DocumentBlock(
+                        block_type=block_type,
+                        content="",
+                        position=position,
+                        object_id=str(getattr(shape, "shape_id", position)),
+                        location_label=f"第 {page_number} 页 · 对象 {position + 1}",
+                        extraction_method="unavailable",
+                        confidence=0.0,
+                        warning=warning,
+                    ))
+                    page_warnings.append(warning)
                 continue
             cleaned = text.strip()
             blocks.append(
@@ -97,12 +118,14 @@ def parse_pptx_document(path: Path) -> ParsedDocument:
                          raw_text=raw_text, location_type="page",
                          location_label=f"第 {page_number} 页",
                          stable_location_key=f"slide:{page_number}",
-                         warning="本页没有识别到文本内容，建议按需 OCR" if not blocks else None,
+                         warning=("；".join(dict.fromkeys(page_warnings)) if page_warnings else
+                                  ("本页没有识别到文本内容，建议按需 OCR" if not any(block.content for block in blocks) else None)),
                          extraction_method="native_text", confidence=1.0,
                          blocks=blocks)
         )
-        if not blocks:
+        if not any(block.content for block in blocks):
             document_warnings.append(f"第 {page_number} 页没有识别到文本")
+        document_warnings.extend(page_warnings)
 
     return ParsedDocument(format="pptx", parser_version=PARSER_VERSION, pages=pages,
                           warnings=document_warnings)

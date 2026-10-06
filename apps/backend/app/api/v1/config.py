@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
+from app.core.config import settings
 from app.core.service_checks import check_provider, provider_status
+from app.parsers.ocr import status as ocr_status
 
 router = APIRouter()
 
@@ -23,6 +25,21 @@ def get_web_search_status() -> dict[str, str | bool]:
 @router.get("/config/status")
 def get_config_status() -> dict:
     return {provider: provider_status(provider) for provider in ("deepseek", "embedding", "tavily")}
+
+
+@router.get("/config/capabilities")
+def get_capabilities() -> dict:
+    return {
+        "allowed_extensions": list(settings.allowed_extensions),
+        "max_upload_bytes": settings.max_upload_bytes,
+        "max_pages": settings.max_pages,
+        "ocr": ocr_status(),
+    }
+
+
+@router.get("/ocr/status")
+def get_ocr_status() -> dict:
+    return ocr_status()
 
 
 

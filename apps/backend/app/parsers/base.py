@@ -43,6 +43,8 @@ class ParsedDocument:
     format: str
     parser_version: str
     pages: list[ParsedPage]
+    material_id: str | None = None
+    file_hash: str | None = None
     warnings: list[str] = field(default_factory=list)
 
 

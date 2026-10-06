@@ -43,6 +43,31 @@ class PageRead(BaseModel):
     confidence: float | None = None
 
 
+class BlockRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    page_id: str
+    block_type: str
+    content: str
+    position: int
+    font_size: float | None
+    is_bold: bool
+    object_id: str | None
+    location_label: str | None
+    extraction_method: str
+    confidence: float | None
+    warning: str | None
+    note_ids: list[str] = []
+    note_titles: list[str] = []
+
+
+class PageEvidenceRead(PageRead):
+    blocks: list[BlockRead] = []
+    note_ids: list[str] = []
+    note_titles: list[str] = []
+
+
 
 class SourceRefRead(BaseModel):
     id: str

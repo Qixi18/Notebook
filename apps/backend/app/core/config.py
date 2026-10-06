@@ -22,6 +22,7 @@ def _resolve_data_dir() -> Path:
 class Settings:
     data_dir: Path
     max_upload_bytes: int
+    max_pages: int
     deepseek_api_key: str | None
     deepseek_base_url: str
     deepseek_model: str
@@ -53,6 +54,7 @@ class Settings:
 settings = Settings(
     data_dir=_resolve_data_dir(),
     max_upload_bytes=int(os.getenv("NOTEBOOK_MAX_UPLOAD_MB", "50")) * 1024 * 1024,
+    max_pages=max(1, int(os.getenv("NOTEBOOK_MAX_PAGES", "500"))),
     deepseek_api_key=os.getenv("DEEPSEEK_API_KEY") or None,
     deepseek_base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
     deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),

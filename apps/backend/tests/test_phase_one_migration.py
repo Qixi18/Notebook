@@ -42,7 +42,7 @@ def test_legacy_upgrade_preserves_note_and_source(tmp_path):
             assert db.execute('select content_markdown,revision_number from notes').fetchone() == ('# 用户正文',2)
             assert db.execute('select quote from source_refs').fetchone()[0] == '原文'
             assert db.execute('select note_id,source_ref_id from note_source_refs').fetchone() == ('n','s')
-            assert db.execute('select version_num from alembic_version').fetchone()[0] == 'b7c2e1f5a901'
+            assert db.execute('select version_num from alembic_version').fetchone()[0] == 'c31e7a4b2d9f'
         print('legacy-upgrade-ok')
     """)
     env = os.environ.copy()
