@@ -11,4 +11,8 @@ export const noteApi = {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content_markdown: contentMarkdown, expected_revision_number: expectedRevisionNumber }),
   }),
+  listSuggestions: (noteId: string) => request<Array<{ id: string; note_id: string; proposed_markdown: string; impact: string; status: string }>>(`/api/v1/notes/${noteId}/suggestions`),
+  reviewSuggestion: (noteId: string, suggestionId: string, decision: 'confirm' | 'reject', note?: string) => request<Note>(`/api/v1/notes/${noteId}/suggestions/${suggestionId}/review`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ decision, note }),
+  }),
 }

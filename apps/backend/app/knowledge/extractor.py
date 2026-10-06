@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session, selectinload
 from app.ai.deepseek import DeepSeekClient, DeepSeekError
 from app.ai.prompts import build_note_extraction_messages
 from app.db.models import (
-    KnowledgeEdge,
     KnowledgeNode,
     Material,
     MaterialPage,
@@ -19,6 +18,9 @@ from app.db.models import (
     PageBlock,
     SourceRef,
 )
+from app.knowledge.matcher import find_candidates, normalize_name
+from app.knowledge.proposals import create_knowledge_proposal
+from app.knowledge.relations import add_relation
 from app.notes.renderer import render_note_markdown
 
 ALLOWED_RELATIONS = {"related", "prerequisite", "deepens"}
@@ -47,6 +49,26 @@ def extract_material_knowledge(db: Session, material_id: str) -> list[KnowledgeN
         source_refs = ensure_source_refs(db, page.blocks, parser_version=material.parser_version)
         draft = extract_page_draft(page.title or f"第 {page.page_number} 页", page.raw_text)
         title = clean_title(str(draft.get("title") or page.title or f"第 {page.page_number} 页"))
+        summary = str(draft.get("summary") or "").strip()
+        candidates = find_candidates(db, course_id=material.course_id, name=title, summary=summary)
+        best = candidates[0] if candidates else None
+        if best and best.score >= 0.72 and normalize_name(best.node.name) != normalize_name(title):
+            create_knowledge_proposal(
+                db,
+                course_id=material.course_id,
+                material_id=material.id,
+                candidate_name=title,
+                candidate_summary=summary,
+                kind="deepen",
+                confidence=best.score,
+                rationale=f"候选知识点“{best.node.name}”与新页面相似；名称不同，不自动合并。",
+                source_ids=[source.id for source in source_refs],
+                target_node_id=best.node.id,
+                proposed_delta={"summary": summary, "page_number": page.page_number},
+            )
+            # Keep the source page searchable while requiring a person to decide
+            # whether the new material deepens the existing node.
+            continue
         node = db.scalar(
             select(KnowledgeNode).where(
                 KnowledgeNode.course_id == material.course_id,
@@ -58,7 +80,7 @@ def extract_material_knowledge(db: Session, material_id: str) -> list[KnowledgeN
             db.add(node)
             db.flush()
 
-        node.summary = str(draft.get("summary") or "").strip() or node.summary
+        node.summary = summary or node.summary
         add_unique_sources(node.source_refs, source_refs)
         note_content = render_note_markdown(
             title=title,
@@ -69,6 +91,20 @@ def extract_material_knowledge(db: Session, material_id: str) -> list[KnowledgeN
             source_refs=source_refs,
         )
         ensure_note(db, material.course_id, node, note_content, source_refs)
+        create_knowledge_proposal(
+            db,
+            course_id=material.course_id,
+            material_id=material.id,
+            candidate_name=title,
+            candidate_summary=summary,
+            kind="repeat" if best else "new",
+            confidence=1.0 if best else 0.0,
+            rationale="名称完全一致，已自动补充来源。" if best else "课程中没有相似知识点，已自动创建。",
+            source_ids=[source.id for source in source_refs],
+            target_node_id=node.id,
+            status="auto_applied",
+            proposed_delta={"summary": summary},
+        )
         ensure_relations(db, material.course_id, node, draft.get("relations"))
         created_or_updated.append(node)
 
@@ -215,27 +251,31 @@ def ensure_relations(
                 KnowledgeNode.name == target_name,
             )
         )
+        confidence = relation.get("confidence")
+        confidence_value = float(confidence) if isinstance(confidence, (int, float)) else None
         if target is None:
+            create_knowledge_proposal(
+                db,
+                course_id=course_id,
+                material_id=None,
+                source_node_id=node.id,
+                candidate_name=target_name,
+                candidate_summary="",
+                kind="relation_pending",
+                confidence=confidence_value or 0.0,
+                rationale="关系目标尚未解析，保留为待确认关系。",
+                proposed_delta={"relation_type": relation_type},
+            )
             continue
-        existing = db.scalar(
-            select(KnowledgeEdge).where(
-                KnowledgeEdge.source_node_id == node.id,
-                KnowledgeEdge.target_node_id == target.id,
-                KnowledgeEdge.relation_type == relation_type,
-            )
+        add_relation(
+            db,
+            course_id=course_id,
+            source_node_id=node.id,
+            target_node_id=target.id,
+            relation_type=relation_type,
+            confidence=confidence_value,
+            created_by="deepseek" if DeepSeekClient().configured else "fallback",
         )
-        if existing is None:
-            confidence = relation.get("confidence")
-            db.add(
-                KnowledgeEdge(
-                    course_id=course_id,
-                    source_node_id=node.id,
-                    target_node_id=target.id,
-                    relation_type=relation_type,
-                    confidence=float(confidence) if isinstance(confidence, (int, float)) else None,
-                    created_by="deepseek" if DeepSeekClient().configured else "fallback",
-                )
-            )
 
 
 def add_unique_sources(target: list[SourceRef], incoming: Iterable[SourceRef]) -> None:

@@ -1,0 +1,45 @@
+from __future__ import annotations
+
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class KnowledgeProposalRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    course_id: str
+    material_id: str | None
+    source_node_id: str | None
+    target_node_id: str | None
+    kind: str
+    candidate_name: str
+    candidate_summary: str
+    confidence: float
+    rationale: str
+    source_ids_json: str
+    proposed_delta_json: str
+    status: str
+    model_version: str | None
+    review_note: str | None
+    created_at: datetime
+    reviewed_at: datetime | None
+
+
+class ProposalReview(BaseModel):
+    decision: str = Field(pattern="^(confirm|reject)$")
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class NoteSuggestionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    note_id: str
+    proposed_markdown: str
+    source_ids_json: str
+    impact: str
+    status: str
+    created_at: datetime
+    reviewed_at: datetime | None

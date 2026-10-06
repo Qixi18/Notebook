@@ -31,6 +31,11 @@ PHASE_TWO_COLUMNS = {
     "page_blocks": {"object_id", "location_label", "extraction_method", "confidence", "warning"},
     "source_refs": {"status", "target_label", "parser_version"},
 }
+PHASE_THREE_TABLES = {
+    "conversations", "conversation_messages", "message_evidence",
+    "knowledge_proposals", "knowledge_changes", "note_suggestions",
+    "feedback", "backup_records",
+}
 LEGACY_COLUMNS = {
     "materials": {"topic_title": "VARCHAR(200)"},
     "processing_jobs": {
@@ -54,7 +59,9 @@ def _prepare_legacy_schema() -> None:
     found = set(inspect(engine).get_table_names())
     if not found or found == {"alembic_version"}:
         return
-    required = {table.name for table in Base.metadata.sorted_tables} - {"web_sources", "note_source_mappings"}
+    required = {table.name for table in Base.metadata.sorted_tables} - {
+        "web_sources", "note_source_mappings", *PHASE_THREE_TABLES,
+    }
     if not required.issubset(found):
         raise RuntimeError(f"Unsupported legacy schema; missing tables: {sorted(required - found)}")
     with engine.begin() as connection:
@@ -63,10 +70,18 @@ def _prepare_legacy_schema() -> None:
             for name, declaration in columns.items():
                 if name not in existing:
                     connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {declaration}"))
-    Base.metadata.create_all(engine)
+    # Create only legacy bridge tables here. Phase three/four tables must be
+    # created by their Alembic revision below, otherwise the revision would
+    # attempt to create tables that this compatibility bridge already made.
+    Base.metadata.create_all(
+        engine,
+        tables=[table for table in Base.metadata.sorted_tables if table.name not in PHASE_THREE_TABLES],
+    )
     with engine.connect() as connection:
         inspector = inspect(connection)
         for table in Base.metadata.sorted_tables:
+            if table.name in PHASE_THREE_TABLES:
+                continue
             existing = {column["name"] for column in inspector.get_columns(table.name)}
             baseline = {column.name for column in table.columns} - PHASE_ONE_COLUMNS.get(table.name, set()) - PHASE_TWO_COLUMNS.get(table.name, set())
             if not baseline.issubset(existing):

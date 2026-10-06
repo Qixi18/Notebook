@@ -9,6 +9,8 @@ class AssistantRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     material_id: str | None = None
     page_number: int | None = None
+    allow_web: bool = True
+    learning_goal: str | None = Field(default=None, max_length=60)
 
 
 
@@ -23,6 +25,9 @@ class AssistantSource(BaseModel):
     site_name: str | None = None
     retrieved_at: datetime | None = None
     published_at: str | None = None
+    location_label: str | None = None
+    support_level: str = "direct"
+    score_source: str | None = None
 
 
 

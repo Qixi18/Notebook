@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$Checkpoint,
-    [Parameter(Mandatory=$true)][string]$Destination
+    [Parameter(Mandatory=$true)][string]$Destination,
+    [switch]$Package
 )
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -9,6 +10,10 @@ if ((Test-Path -LiteralPath $Destination) -and @(Get-ChildItem -LiteralPath $Des
 }
 Push-Location (Join-Path $repo 'apps\backend')
 try {
-    uv run python -m app.db.checkpoint restore $Checkpoint --destination $Destination
+    if ($Package) {
+        uv run python -m app.services.backup restore $Checkpoint --destination $Destination
+    } else {
+        uv run python -m app.db.checkpoint restore $Checkpoint --destination $Destination
+    }
     if ($LASTEXITCODE -ne 0) { throw 'Checkpoint restore failed.' }
 } finally { Pop-Location }

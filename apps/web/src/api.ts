@@ -4,6 +4,9 @@ import { courseApi } from './api/courses'
 import { knowledgeApi } from './api/knowledge'
 import { materialApi } from './api/materials'
 import { noteApi } from './api/notes'
+import { conversationApi } from './api/conversations'
+import { feedbackApi } from './api/feedback'
+import { backupApi } from './api/backup'
 
 export { ApiError } from './api/http'
 export type { Capabilities, OCRStatus, ProviderStatus } from './api/config'
@@ -15,4 +18,7 @@ export const api = {
   ...knowledgeApi,
   ...assistantApi,
   ...configApi,
+  ...conversationApi,
+  ...feedbackApi,
+  ...backupApi,
 }

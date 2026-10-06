@@ -8,6 +8,7 @@ export const configApi = {
   getWebSearchStatus: () => request<{ configured: boolean; provider: string; status: string }>('/api/v1/web-search/status'),
   getConfigStatus: () => request<Record<string, ProviderStatus>>('/api/v1/config/status'),
   checkProvider: (provider: 'deepseek' | 'embedding' | 'tavily') => request<ProviderStatus>(`/api/v1/config/check/${provider}`, { method: 'POST' }),
+  getDiagnostics: () => request<Record<string, unknown>>('/api/v1/config/diagnostics'),
   getCapabilities: () => request<Capabilities>('/api/v1/config/capabilities'),
   getOCRStatus: () => request<OCRStatus>('/api/v1/ocr/status'),
 }

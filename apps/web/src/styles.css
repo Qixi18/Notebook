@@ -389,6 +389,18 @@ button.source-card:hover { transform: translateY(-1px); border-color: #b9d9ef; b
 .conversation-user > p { border-color: #d8ebf8; border-radius: 14px 4px 14px 14px; color: #3f6684; background: #eaf5fd; }
 .answer-sources { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .answer-sources > span { color: #84a0b5; font-size: 12px; font-weight: 700; }
+.answer-evidence-list,
+.answer-feedback-actions { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin-top: 10px; }
+.answer-evidence-list span { width: 100%; color: #84a0b5; font-size: 12px; font-weight: 700; }
+.answer-evidence-list small,
+.answer-feedback-actions small { border: 1px solid #e0edf6; border-radius: 999px; padding: 4px 7px; color: #718ca2; font-size: 11px; }
+.answer-feedback-actions button { border: 1px solid #dcebf5; border-radius: 999px; padding: 4px 8px; color: #5b7c95; background: transparent; font-size: 11px; cursor: pointer; }
+.proposal-card { display: grid; gap: 5px; border: 1px solid #e1edf5; border-radius: 12px; margin-top: 8px; padding: 10px; background: #fbfdff; }
+.proposal-card strong { color: #4a6d87; font-size: 12px; }
+.proposal-card small, .proposal-card p { color: #7c94a7; font-size: 11px; line-height: 1.5; }
+.proposal-card p { margin: 0; }
+.proposal-card .secondary-button, .proposal-card .text-button { font-size: 11px; }
+.form-success { color: #4d8b69; font-size: 12px; line-height: 1.5; }
 .answer-mode-label, .answer-no-evidence { display: block; width: fit-content; border-radius: 99px; margin-top: 8px; padding: 5px 8px; color: #6487a1; background: #f0f7fc; font-size: 11px; }
 .answer-no-evidence { border-radius: 8px; color: #8d7954; background: #fff8e9; line-height: 1.5; }
 .assistant-context-bar > .teacher-character-compact { flex: none; }

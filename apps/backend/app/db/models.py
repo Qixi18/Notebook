@@ -48,6 +48,21 @@ class Course(Base):
     materials: Mapped[list[Material]] = relationship(
         back_populates="course", cascade="all, delete-orphan"
     )
+    conversations: Mapped[list[Conversation]] = relationship(
+        back_populates="course", cascade="all, delete-orphan"
+    )
+    knowledge_proposals: Mapped[list[KnowledgeProposal]] = relationship(
+        back_populates="course", cascade="all, delete-orphan"
+    )
+    knowledge_changes: Mapped[list[KnowledgeChange]] = relationship(
+        back_populates="course", cascade="all, delete-orphan"
+    )
+    feedback: Mapped[list[Feedback]] = relationship(
+        back_populates="course", cascade="all, delete-orphan"
+    )
+    backup_records: Mapped[list[BackupRecord]] = relationship(
+        back_populates="course", cascade="all, delete-orphan"
+    )
 
 
 class Material(Base):
@@ -341,3 +356,180 @@ class RetrievalChunk(Base):
 
     course: Mapped[Course] = relationship()
     page_block: Mapped[PageBlock] = relationship(back_populates="retrieval_chunk")
+
+
+class Conversation(Base):
+    """Persisted, course-scoped assistant conversation."""
+
+    __tablename__ = "conversations"
+    __table_args__ = (Index("ix_conversations_course_id", "course_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    course_id: Mapped[str] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(300), default="新对话", nullable=False)
+    default_scope: Mapped[str] = mapped_column(String(30), default="course", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now, nullable=False)
+
+    course: Mapped[Course] = relationship(back_populates="conversations")
+    messages: Mapped[list[ConversationMessage]] = relationship(
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="ConversationMessage.created_at",
+    )
+
+
+class ConversationMessage(Base):
+    __tablename__ = "conversation_messages"
+    __table_args__ = (
+        Index("ix_conversation_messages_conversation_id", "conversation_id"),
+        UniqueConstraint("conversation_id", "idempotency_key", name="uq_message_idempotency"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"))
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    learning_goal: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="completed", nullable=False)
+    model_version: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    failure_type: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+
+    conversation: Mapped[Conversation] = relationship(back_populates="messages")
+    evidence: Mapped[list[MessageEvidence]] = relationship(
+        back_populates="message", cascade="all, delete-orphan"
+    )
+
+
+class MessageEvidence(Base):
+    __tablename__ = "message_evidence"
+    __table_args__ = (Index("ix_message_evidence_message_id", "message_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    message_id: Mapped[str] = mapped_column(ForeignKey("conversation_messages.id", ondelete="CASCADE"))
+    source_ref_id: Mapped[str | None] = mapped_column(
+        ForeignKey("source_refs.id", ondelete="CASCADE"), nullable=True
+    )
+    web_source_id: Mapped[str | None] = mapped_column(
+        ForeignKey("web_sources.id", ondelete="CASCADE"), nullable=True
+    )
+    claim_key: Mapped[str] = mapped_column(String(200), default="answer", nullable=False)
+    evidence_type: Mapped[str] = mapped_column(String(40), default="course_direct", nullable=False)
+    support_level: Mapped[str] = mapped_column(String(30), default="direct", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+
+    message: Mapped[ConversationMessage] = relationship(back_populates="evidence")
+    source_ref: Mapped[SourceRef | None] = relationship()
+    web_source: Mapped[WebSource | None] = relationship()
+
+
+class KnowledgeProposal(Base):
+    __tablename__ = "knowledge_proposals"
+    __table_args__ = (Index("ix_knowledge_proposals_course_status", "course_id", "status"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    course_id: Mapped[str] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"))
+    material_id: Mapped[str | None] = mapped_column(
+        ForeignKey("materials.id", ondelete="SET NULL"), nullable=True
+    )
+    source_node_id: Mapped[str | None] = mapped_column(
+        ForeignKey("knowledge_nodes.id", ondelete="SET NULL"), nullable=True
+    )
+    target_node_id: Mapped[str | None] = mapped_column(
+        ForeignKey("knowledge_nodes.id", ondelete="SET NULL"), nullable=True
+    )
+    kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    candidate_name: Mapped[str] = mapped_column(String(300), nullable=False)
+    candidate_summary: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    confidence: Mapped[float] = mapped_column(default=0.0, nullable=False)
+    rationale: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    source_ids_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    proposed_delta_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="pending", nullable=False)
+    model_version: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+    reviewed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    course: Mapped[Course] = relationship(back_populates="knowledge_proposals")
+    source_node: Mapped[KnowledgeNode | None] = relationship(foreign_keys=[source_node_id])
+    target_node: Mapped[KnowledgeNode | None] = relationship(foreign_keys=[target_node_id])
+
+
+class KnowledgeChange(Base):
+    __tablename__ = "knowledge_changes"
+    __table_args__ = (Index("ix_knowledge_changes_course_id", "course_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    course_id: Mapped[str] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"))
+    proposal_id: Mapped[str | None] = mapped_column(
+        ForeignKey("knowledge_proposals.id", ondelete="SET NULL"), nullable=True
+    )
+    node_id: Mapped[str | None] = mapped_column(
+        ForeignKey("knowledge_nodes.id", ondelete="SET NULL"), nullable=True
+    )
+    change_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    before_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    after_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    reason: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+
+    course: Mapped[Course] = relationship(back_populates="knowledge_changes")
+
+
+class NoteSuggestion(Base):
+    __tablename__ = "note_suggestions"
+    __table_args__ = (Index("ix_note_suggestions_note_status", "note_id", "status"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    note_id: Mapped[str] = mapped_column(ForeignKey("notes.id", ondelete="CASCADE"))
+    proposed_markdown: Mapped[str] = mapped_column(Text, nullable=False)
+    source_ids_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    impact: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="pending", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+    reviewed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    note: Mapped[Note] = relationship()
+
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+    __table_args__ = (
+        Index("ix_feedback_course_status", "course_id", "status"),
+        UniqueConstraint("course_id", "target_type", "target_id", "category", name="uq_feedback_target"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    course_id: Mapped[str] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"))
+    target_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    category: Mapped[str] = mapped_column(String(40), nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="open", nullable=False)
+    resolution: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now, nullable=False)
+
+    course: Mapped[Course] = relationship(back_populates="feedback")
+
+
+class BackupRecord(Base):
+    __tablename__ = "backup_records"
+    __table_args__ = (Index("ix_backup_records_course_id", "course_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    course_id: Mapped[str | None] = mapped_column(
+        ForeignKey("courses.id", ondelete="SET NULL"), nullable=True
+    )
+    action: Mapped[str] = mapped_column(String(30), nullable=False)
+    path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="pending", nullable=False)
+    manifest_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    course: Mapped[Course | None] = relationship(back_populates="backup_records")

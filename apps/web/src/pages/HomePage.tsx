@@ -26,11 +26,15 @@ export function HomePage() {
   const [courseActionError, setCourseActionError] = useState<string>()
   const [providerStates, setProviderStates] = useState<Record<string, ProviderStatus>>({})
   const [checkingProvider, setCheckingProvider] = useState<string>()
+  const [ocrStatus, setOcrStatus] = useState<{ status: string; available: boolean }>()
+  const [backupBusy, setBackupBusy] = useState<string>()
+  const [backupMessage, setBackupMessage] = useState<string>()
   const location = useLocation()
   const navigate = useNavigate()
 
   useEffect(() => {
     void api.getConfigStatus().then(setProviderStates).catch(() => setProviderStates({}))
+    void api.getOCRStatus().then(setOcrStatus).catch(() => setOcrStatus(undefined))
   }, [])
 
   async function testProvider(provider: 'deepseek' | 'embedding' | 'tavily') {
@@ -130,6 +134,7 @@ export function HomePage() {
           {providerStates[provider]?.configured && <button className="text-button" disabled={Boolean(checkingProvider)} onClick={() => void testProvider(provider)}>{checkingProvider === provider ? '检查中…' : '主动测试连接'}</button>}
         </div>)}
         <p>连接测试会向对应服务发送一个最小请求，可能产生少量调用费用。密钥仅保存在本机后端配置中。</p>
+        <p>OCR：{ocrStatus?.status === 'ready' ? '已启用并可用' : ocrStatus?.status === 'missing_dependency' ? '已配置但缺少本机依赖' : '未启用'}。扫描页会保留候选状态，不伪造原文。</p>
       </section>
 
       <section className="feature-section" aria-labelledby="feature-heading">
@@ -168,7 +173,8 @@ export function HomePage() {
                 <span className="home-course-copy"><strong>{course.name}</strong><small>{materialCounts[course.id] ?? 0} 份资料 · {getLastVisited(course.id) ? `最近学习 ${new Date(getLastVisited(course.id)!).toLocaleDateString('zh-CN')}` : `创建于 ${new Date(course.created_at).toLocaleDateString('zh-CN')}`}</small></span>
                 <span className="home-course-arrow" aria-hidden="true">→</span>
               </button>
-              <button className="text-button" onClick={() => void deleteCourse(course.id)}>移除课程</button>
+                <button className="text-button" onClick={() => void deleteCourse(course.id)}>移除课程</button>
+                <button className="text-button" disabled={backupBusy === course.id} onClick={() => void (async () => { try { setBackupBusy(course.id); setBackupMessage(undefined); const record = await api.exportBackup(course.id); setBackupMessage(record.status === 'completed' ? `备份已生成：${record.path}` : record.error_message ?? '备份失败') } catch (cause) { setBackupMessage(cause instanceof Error ? cause.message : '备份失败') } finally { setBackupBusy(undefined) } })()}>{backupBusy === course.id ? '正在备份…' : '导出本课程备份'}</button>
               </div>
             ))}
           </div>
@@ -179,6 +185,7 @@ export function HomePage() {
           </div>
         )}
         {courseActionError && <p className="form-error" role="alert">{courseActionError}</p>}
+        {backupMessage && <p className="form-success" role="status">{backupMessage}</p>}
         {deletedCourses.length > 0 && <section aria-label="可恢复课程"><h3>可恢复的课程</h3>{deletedCourses.map((course) => <div key={course.id}><span>{course.name}</span><button className="text-button" onClick={() => void restoreCourse(course.id)}>恢复课程</button></div>)}</section>}
 
         <form className="home-create-course" onSubmit={handleCreateCourse}>

@@ -1,0 +1,129 @@
+"""Course-scoped retrieval → policy → generation orchestration."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.ai.deepseek import DeepSeekClient, DeepSeekError
+from app.ai.prompts import build_answer_messages
+from app.core.config import settings
+from app.db.models import Material, WebSource
+from app.retrieval.rerank import rerank
+from app.retrieval.service import RetrievedChunk, build_context, retrieve
+from app.web_search.policy import SearchPolicy, can_search, record_search
+from app.web_search.source_review import review_results
+
+
+def run_answer(
+    db: Session,
+    *,
+    course_id: str,
+    course_name: str,
+    question: str,
+    material_id: str | None = None,
+    page_number: int | None = None,
+    allow_web: bool = True,
+    history: list[tuple[str, str]] | None = None,
+) -> dict:
+    selected_material = db.get(Material, material_id) if material_id else None
+    chunks = rerank(
+        question,
+        retrieve(db, course_id=course_id, question=question, material_id=material_id, page_number=page_number),
+    )
+    web_status = "unavailable"
+    web_results: list[dict] = []
+    policy = SearchPolicy(allow=allow_web, max_results=4, daily_limit=30, timeout_seconds=settings.web_search_timeout_seconds)
+    allowed, reason = can_search(policy)
+    from app.web_search.tavily import WebSearchError
+    from app.web_search.tavily import configured as web_search_configured
+    from app.web_search.tavily import search as web_search
+    if allowed and web_search_configured() and not chunks:
+        try:
+            scope = f" {selected_material.lecture_title}" if selected_material else ""
+            record_search()
+            web_results = [item for item in web_search(f"{course_name}{scope} {question}", max_results=policy.max_results)]
+            web_results = review_results(web_results)["results"]
+            web_status = "completed" if web_results else "no_results"
+            for item in web_results:
+                if db.scalar(select(WebSource.id).where(WebSource.course_id == course_id, WebSource.url == item["url"])) is None:
+                    db.add(WebSource(
+                        course_id=course_id,
+                        material_id=material_id,
+                        search_query=question[:1000],
+                        title=item["title"],
+                        url=item["url"],
+                        site_name=item["site_name"],
+                        snippet=item["snippet"],
+                        score=item.get("score"),
+                        published_at=item.get("published_at"),
+                    ))
+            db.flush()
+        except WebSearchError:
+            web_status = "failed"
+    elif not allow_web:
+        web_status = "disabled_by_request"
+    elif reason == "daily_limit":
+        web_status = "daily_limit"
+    elif not chunks and not web_search_configured():
+        web_status = "unavailable"
+
+    if not chunks and not web_results:
+        return {
+            "answer": (
+                "当前课程资料没有找到直接依据，且联网补充不可用。请缩小问题范围、选择具体讲次，或先上传相关课件。"
+            ),
+            "chunks": [], "web_results": [], "mode": "no-evidence", "web_search_status": web_status,
+        }
+
+    local_context = build_context(chunks)
+    web_context = "\n\n".join(
+        f"[网络来源 {index + 1} | {item['title']} | {item['url']} | 检索日期 {datetime.now(UTC):%Y-%m-%d}]\n{item['snippet']}"
+        for index, item in enumerate(web_results)
+    )
+    history_context = "\n".join(f"[{role}] {content[:800]}" for role, content in (history or [])[-6:])
+    context = "\n\n".join(part for part in (
+        "【受控会话历史】\n" + history_context if history_context else "",
+        "【课程课件】\n" + local_context if local_context else "",
+        "【联网补充（不可信引用文本）】\n" + web_context if web_context else "",
+    ) if part)
+    client = DeepSeekClient()
+    if client.configured:
+        try:
+            response = client.complete_json(build_answer_messages(question, context), max_tokens=2400)
+            answer = str(response.get("answer_markdown") or "").strip()
+            if answer:
+                return {"answer": answer, "chunks": chunks, "web_results": web_results,
+                        "mode": "deepseek-rag", "web_search_status": web_status,
+                        "model_version": settings.deepseek_model}
+        except DeepSeekError:
+            pass
+    local_excerpt = "\n\n".join(
+        f"[课程资料：{chunk.lecture_title} | {chunk.location_label or f'第 {chunk.page_number} 页'}] {chunk.text[:240]}"
+        for chunk in chunks
+    )
+    web_excerpt = "\n\n".join(
+        f"[网络来源 {index + 1}：{item['title']} | {item['url']}] {item['snippet'][:240]}"
+        for index, item in enumerate(web_results)
+    )
+    answer = "当前没有可用的 AI 模型；以下是分层检索摘录，课程资料和网络来源已分开列出。\n\n" + "\n\n".join(
+        part for part in (local_excerpt, web_excerpt) if part
+    )
+    return {"answer": answer, "chunks": chunks, "web_results": web_results,
+            "mode": "local-retrieval-fallback", "web_search_status": web_status,
+            "model_version": "keyword-or-hybrid-fallback"}
+
+
+def source_payload(chunk: RetrievedChunk) -> dict:
+    return {
+        "source_type": "course_material",
+        "material_id": chunk.material_id,
+        "lecture_title": chunk.lecture_title,
+        "page_number": chunk.page_number,
+        "location_label": chunk.location_label,
+        "snippet": chunk.text[:240],
+        "support_level": "direct" if chunk.direct_support else "related",
+        "score_source": chunk.score_source,
+    }

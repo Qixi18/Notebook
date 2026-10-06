@@ -42,6 +42,7 @@ export function NotesPage() {
   const [lectureFilter, setLectureFilter] = useState('all')
   const [evidenceOpen, setEvidenceOpen] = useState(false)
   const [webSources, setWebSources] = useState<import('../types').WebSource[]>([])
+  const [suggestions, setSuggestions] = useState<Array<{ id: string; proposed_markdown: string; impact: string; status: string }>>([])
   const filteredNotes = notes.filter((note) => lectureFilter === 'all' || graph.nodes.find((node) => node.id === note.knowledge_node_id)?.sources.some((source) => source.material_id === lectureFilter))
 
   useEffect(() => {
@@ -53,12 +54,13 @@ export function NotesPage() {
     if (!selectedNote) return
     let active = true
     setDetailLoading(true)
-    void Promise.all([api.getNoteSources(selectedNote.id), api.getNoteRevisions(selectedNote.id), api.getNoteWebSources(selectedNote.id)])
-      .then(([nextSources, nextRevisions, nextWebSources]) => {
+    void Promise.all([api.getNoteSources(selectedNote.id), api.getNoteRevisions(selectedNote.id), api.getNoteWebSources(selectedNote.id), api.listSuggestions(selectedNote.id)])
+      .then(([nextSources, nextRevisions, nextWebSources, nextSuggestions]) => {
         if (!active) return
         setSources(nextSources)
         setRevisions(nextRevisions)
         setWebSources(nextWebSources)
+        setSuggestions(nextSuggestions)
       })
       .catch((cause: unknown) => {
         if (active) setDetailError(cause instanceof Error ? cause.message : '笔记来源读取失败')
@@ -66,6 +68,16 @@ export function NotesPage() {
       .finally(() => { if (active) setDetailLoading(false) })
     return () => { active = false }
   }, [selectedNote?.id, selectedNote?.revision_number])
+
+  async function reviewSuggestion(suggestionId: string, decision: 'confirm' | 'reject') {
+    if (!selectedNote) return
+    const updated = await api.reviewSuggestion(selectedNote.id, suggestionId, decision)
+    setSuggestions((items) => items.map((item) => item.id === suggestionId ? { ...item, status: decision === 'confirm' ? 'accepted' : 'rejected' } : item))
+    if (decision === 'confirm') {
+      setSelectedNoteId(updated.id)
+      await reloadNote()
+    }
+  }
 
   function openSource(source: NoteSourceRef) {
     setSelectedMaterialId(source.material_id)
@@ -139,6 +151,7 @@ export function NotesPage() {
             <div className="note-evidence-panel"><div className="panel-heading"><strong>课件来源</strong><span>{sources.length}</span></div>{detailLoading ? <div className="inline-empty" role="status">正在读取来源…</div> : sources.length ? <div className="source-card-list">{sources.map((source) => <SourceCard key={source.id} title={materials.find((item) => item.id === source.material_id)?.lecture_title ?? '课程资料'} pageNumber={source.page_number} locationLabel={source.location_label} quote={source.quote} sourceLabel={source.status === 'active' ? '课程课件' : '待核对来源'} onOpen={() => openSource(source)} />)}</div> : <p className="evidence-empty">{detailError ? '来源暂时无法读取。' : '这条笔记当前没有可追溯的课件片段。'}</p>}</div>
             <div className="note-evidence-panel"><div className="panel-heading"><strong>网络补充来源</strong><span>{webSources.length}</span></div>{webSources.length ? <div className="source-card-list">{webSources.map((source) => <a className="source-card" key={source.id} href={source.url} target="_blank" rel="noreferrer"><span className="source-card-icon">↗</span><span className="source-card-body"><small className="source-card-meta">{source.site_name} · 检索于 {new Date(source.retrieved_at).toLocaleDateString('zh-CN')}</small><strong>{source.title}</strong><small>{source.snippet}</small></span></a>)}</div> : <p className="evidence-empty">尚无关联网络来源；检索关闭或没有达到链接格式与相关度要求的结果时，这里会保持为空。</p>}</div>
             <div className="note-evidence-panel"><div className="panel-heading"><strong>修订历史</strong><span>{revisions.length} 个版本</span></div>{detailLoading ? <div className="inline-empty" role="status">正在读取版本…</div> : revisions.length ? <div className="revision-list">{revisions.slice().reverse().map((revision) => <button key={revision.id} className={`revision-item ${previewRevision?.id === revision.id ? 'revision-item-active' : ''}`} onClick={() => { if (noteDirty && !window.confirm('笔记有未保存的修改。切换历史版本会结束编辑，仍要继续吗？')) return; setEditingNote(false); setPreviewRevision(revision.revision_number === selectedNote.revision_number ? undefined : revision) }}><span><strong>v{revision.revision_number}{revision.revision_number === selectedNote.revision_number ? ' · 当前' : ''}</strong><small>{revision.user_locked ? '用户保存' : revision.content_origin === 'ai_web_augmented' ? '含网络补充来源' : revision.content_origin === 'ai' ? 'AI 整理' : '课程整理'}</small></span><time dateTime={revision.created_at}>{new Date(revision.created_at).toLocaleString('zh-CN')}</time></button>)}</div> : <p className="evidence-empty">暂无可展示的历史版本。</p>}</div>
+            <div className="note-evidence-panel"><div className="panel-heading"><strong>AI 建议片段</strong><span>{suggestions.filter((item) => item.status === 'pending').length} 待确认</span></div>{suggestions.filter((item) => item.status === 'pending').length ? suggestions.filter((item) => item.status === 'pending').map((suggestion) => <article className="proposal-card" key={suggestion.id}><small>{suggestion.impact}</small><p>{suggestion.proposed_markdown.slice(0, 240)}</p><div><button className="secondary-button" onClick={() => void reviewSuggestion(suggestion.id, 'confirm')}>接受并生成版本</button><button className="text-button" onClick={() => void reviewSuggestion(suggestion.id, 'reject')}>拒绝</button></div></article>) : <p className="evidence-empty">没有待确认的 AI 笔记建议；用户正文不会被自动改写。</p>}</div>
           </aside>}
         </section>
       )}

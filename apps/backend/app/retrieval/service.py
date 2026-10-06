@@ -19,6 +19,10 @@ class RetrievedChunk:
     page_number: int
     text: str
     score: float
+    page_block_id: str | None = None
+    location_label: str | None = None
+    score_source: str = "keyword"
+    direct_support: bool = True
 
 
 def index_material(db: Session, material_id: str) -> None:
@@ -94,7 +98,7 @@ def retrieve(
         except EmbeddingError:
             query_vector = None
     results: list[RetrievedChunk] = []
-    for chunk, _, page, material in db.execute(query).all():
+    for chunk, block, page, material in db.execute(query).all():
         text = chunk.text.strip()
         haystack = text.lower()
         lexical_score = float(sum(haystack.count(term) for term in terms))
@@ -113,6 +117,10 @@ def retrieve(
                     page_number=page.page_number,
                     text=text,
                     score=score,
+                    page_block_id=chunk.page_block_id,
+                    location_label=block.location_label or page.location_label,
+                    score_source="hybrid" if vector_score else "keyword",
+                    direct_support=lexical_score > 0 or vector_score >= 0.55,
                 )
             )
     results.sort(key=lambda item: item.score, reverse=True)

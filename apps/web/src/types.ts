@@ -125,6 +125,9 @@ export type AssistantSource = {
   site_name?: string | null
   retrieved_at?: string | null
   published_at?: string | null
+  location_label?: string | null
+  support_level?: string
+  score_source?: string | null
 }
 
 export type WebSource = {
@@ -210,4 +213,94 @@ export type KnowledgeEdge = {
 export type KnowledgeGraph = {
   nodes: KnowledgeNode[]
   edges: KnowledgeEdge[]
+}
+
+export type Conversation = {
+  id: string
+  course_id: string
+  title: string
+  default_scope: string
+  created_at: string
+  updated_at: string
+}
+
+export type MessageEvidence = {
+  id: string
+  claim_key: string
+  evidence_type: string
+  support_level: string
+  source_ref_id?: string | null
+  web_source_id?: string | null
+  snippet?: string | null
+  location_label?: string | null
+}
+
+export type ConversationMessage = {
+  id: string
+  conversation_id: string
+  role: 'user' | 'assistant'
+  content: string
+  learning_goal?: string | null
+  status: string
+  model_version?: string | null
+  failure_type?: string | null
+  created_at: string
+  evidence: MessageEvidence[]
+}
+
+export type KnowledgeProposal = {
+  id: string
+  course_id: string
+  material_id?: string | null
+  source_node_id?: string | null
+  target_node_id?: string | null
+  kind: string
+  candidate_name: string
+  candidate_summary: string
+  confidence: number
+  rationale: string
+  source_ids_json: string
+  proposed_delta_json: string
+  status: string
+  model_version?: string | null
+  review_note?: string | null
+  created_at: string
+  reviewed_at?: string | null
+}
+
+export type Feedback = {
+  id: string
+  course_id: string
+  target_type: string
+  target_id: string
+  category: string
+  comment?: string | null
+  status: string
+  resolution?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type BackupRecord = {
+  id: string
+  course_id?: string | null
+  action: string
+  path?: string | null
+  status: string
+  manifest_json: string
+  error_message?: string | null
+  created_at: string
+  completed_at?: string | null
+}
+
+export type BackupPreview = {
+  valid: boolean
+  format?: number | null
+  created_at?: string | null
+  course_count: number
+  material_count: number
+  original_count: number
+  total_bytes: number
+  conflicts: string[]
+  errors: string[]
 }

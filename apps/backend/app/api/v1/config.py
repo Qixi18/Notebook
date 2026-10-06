@@ -24,7 +24,9 @@ def get_web_search_status() -> dict[str, str | bool]:
 
 @router.get("/config/status")
 def get_config_status() -> dict:
-    return {provider: provider_status(provider) for provider in ("deepseek", "embedding", "tavily")}
+    result = {provider: provider_status(provider) for provider in ("deepseek", "embedding", "tavily")}
+    result["ocr"] = ocr_status()
+    return result
 
 
 @router.get("/config/capabilities")
@@ -45,6 +47,29 @@ def get_ocr_status() -> dict:
 
 @router.post("/config/check/{provider}")
 def check_config_provider(provider: str) -> dict:
+    if provider == "ocr":
+        return ocr_status()
     if provider not in ("deepseek", "embedding", "tavily"):
         raise HTTPException(status_code=404, detail="服务类型不存在")
     return check_provider(provider)
+
+
+@router.get("/config/diagnostics")
+def get_diagnostics() -> dict:
+    """Return actionable local capability state without exposing environment secrets."""
+    return {
+        "data_dir": str(settings.data_dir),
+        "database": str(settings.data_dir / "notebook.sqlite3"),
+        "originals_dir": str(settings.originals_dir),
+        "providers": get_config_status(),
+        "limits": {
+            "max_upload_bytes": settings.max_upload_bytes,
+            "max_pages": settings.max_pages,
+            "allowed_extensions": list(settings.allowed_extensions),
+        },
+        "security": {
+            "bind_address": "127.0.0.1 (configured by local dev script)",
+            "secrets_in_response": False,
+            "backup_excludes_env": True,
+        },
+    }

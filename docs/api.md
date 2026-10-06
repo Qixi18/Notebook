@@ -7,13 +7,35 @@
 | 上传 | `POST /courses/{course_id}/materials` | 只保存文件并创建 `pending` 任务，返回资料和任务；执行器异步处理。支持可选 `Idempotency-Key` 请求头和 `allow_duplicate` 表单字段 |
 | 查询任务 | `GET /jobs/{job_id}`、`GET /materials/{material_id}/latest-job` | 返回状态、阶段、进度、错误码、错误消息、尝试次数 |
 | 重试 | `POST /materials/{material_id}/retry` | 仅失败任务可重试；新建待处理任务，原文件保留 |
-| 配置状态 | `GET /config/status` | 区分未配置、已配置未验证及本进程最近一次连接结果，不返回密钥 |
+| 配置状态 | `GET /config/status`、`GET /config/diagnostics` | 区分未配置、已配置未验证及本进程最近一次连接结果；诊断返回本地路径、限制和安全边界，不返回密钥 |
 | 主动测试 | `POST /config/check/{deepseek\|embedding\|tavily}` | 用户主动触发单次最小调用；每服务至少间隔 1 分钟；可能产生费用 |
 | 课程移除 | `GET /courses/{course_id}/deletion-preview` → `DELETE /courses/{course_id}` → `POST /courses/{course_id}/restore` | 预览影响、删除前检查点、逻辑删除及恢复；有活动任务时拒绝 |
 | 资料移除 | `GET /materials/{material_id}/deletion-preview` → `DELETE /materials/{material_id}` → `POST /materials/{material_id}/restore` | 同上；原文件、知识节点、用户笔记仍保留 |
 | 恢复列表 | `GET /courses/deleted`、`GET /courses/{course_id}/deleted-materials` | 供本地 UI 显示可恢复对象 |
 
-资料、笔记、任务等独立 ID 接口会校验所属课程仍有效；跨课程资料筛选不能用于另一课程答疑。答疑未传 `material_id` 时表示整门课程。当前对话仍为单轮，会话持久化留待阶段三。
+资料、笔记、任务等独立 ID 接口会校验所属课程仍有效；跨课程资料筛选不能用于另一课程答疑。答疑未传 `material_id` 时表示整门课程。
+
+## 阶段三会话与知识整合接口
+
+| 能力 | 接口 | 行为 |
+|---|---|---|
+| 持久会话 | `POST/GET /courses/{course_id}/conversations` | 会话只属于一个课程，切换课程不会带入旧历史 |
+| 会话消息 | `GET /conversations/{id}/messages`、`POST /conversations/{id}/messages` | 保存有限历史窗口、学习目标、失败状态和证据映射；`idempotency_key` 防止重复消息 |
+| 知识提案 | `GET /courses/{course_id}/knowledge-proposals`、`POST /knowledge-proposals/{id}/review` | 相似但名称不同的跨讲候选进入待确认状态，确认后写入变更记录 |
+| 知识变更 | `GET /courses/{course_id}/knowledge-changes` | 查看新增、深化、来源补充和审核理由 |
+| 笔记建议 | `GET/POST /notes/{id}/suggestions`、`POST /notes/{id}/suggestions/{suggestion_id}/review` | AI 只写建议；用户确认后才生成用户版本 |
+| 反馈 | `POST/GET /courses/{course_id}/feedback` | 答案、笔记、提案和来源反馈按目标去重并验证课程归属 |
+
+答疑先检索课程内部资料；只有没有直接命中且策略允许时才调用联网搜索。回答来源按课件、网络补充、直接支持/相关支持分别标记。
+
+## 阶段四备份接口
+
+| 能力 | 接口 | 行为 |
+|---|---|---|
+| 导出完整包 | `POST /backups/export` | 生成含 SQLite 一致性快照、原文件和哈希清单的 `.notebuddy.zip`，不含 `.env` 和派生索引 |
+| 导入预览 | `POST /backups/preview` | 隔离读取并校验版本、路径、数量、哈希和 SQLite integrity，不修改当前库 |
+| 隔离恢复 | `POST /backups/restore` | 校验后恢复到本地隔离目录并记录状态，不未经确认替换当前数据 |
+| 备份状态 | `GET /backups/{id}`、`GET /courses/{course_id}/backups` | 返回处理状态、清单摘要和脱敏错误 |
 
 `GET /web-search/status` 继续兼容旧前端字段，但 Key 存在时状态是 `configured_untested`，不代表认证或搜索已成功。调用模型、联网和 Embedding 的实际结果需单独记录，不以配置状态替代联调验收。
 
