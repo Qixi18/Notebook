@@ -5,6 +5,13 @@ import rehypeKatex from 'rehype-katex'
 import remarkMath from 'remark-math'
 
 import { api } from './api'
+import {
+  CourseContextMenu,
+  DeleteCourseDialog,
+  RenameCourseDialog,
+} from './CourseContextMenu'
+import type { ContextMenuState } from './CourseContextMenu'
+import { SettingsPanel } from './SettingsPanel'
 import type {
   AssistantSource,
   Course,
@@ -100,6 +107,15 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [noteSaving, setNoteSaving] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
+  const [courseAction, setCourseAction] = useState<{
+    kind: 'rename' | 'delete'
+    courseId: string
+    courseName: string
+  }>()
+  const [courseActionSaving, setCourseActionSaving] = useState(false)
+  const [deleteNotice, setDeleteNotice] = useState<string>()
   const [error, setError] = useState<string>()
 
   const selectedCourse = courses.find((course) => course.id === selectedCourseId)
@@ -244,6 +260,56 @@ function App() {
     }
   }
 
+  async function handleRenameCourse(name: string) {
+    if (!courseAction) return
+    try {
+      setCourseActionSaving(true)
+      setError(undefined)
+      const updated = await api.renameCourse(courseAction.courseId, name)
+      setCourses((current) =>
+        current.map((course) => (course.id === updated.id ? updated : course)),
+      )
+      setCourseAction(undefined)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '课程重命名失败')
+    } finally {
+      setCourseActionSaving(false)
+    }
+  }
+
+  async function handleDeleteCourse() {
+    if (!courseAction) return
+    const removedId = courseAction.courseId
+    try {
+      setCourseActionSaving(true)
+      setError(undefined)
+      const result = await api.deleteCourse(removedId)
+      const remaining = courses.filter((course) => course.id !== removedId)
+      const removedName = courseAction.courseName
+      setCourses(remaining)
+      // 被删的若是当前课程，切到列表里的下一门，否则清空工作区
+      if (selectedCourseId === removedId) {
+        setSelectedCourseId(remaining[0]?.id)
+        setMaterials([])
+        setPages([])
+        setNotes([])
+        setGraph({ nodes: [], edges: [] })
+        setSelectedMaterialId(undefined)
+        setSelectedPageNumber(undefined)
+        setSelectedNoteId(undefined)
+        setJob(undefined)
+      }
+      setCourseAction(undefined)
+      setDeleteNotice(
+        `已删除「${removedName}」：${result.deleted_materials} 份资料、${result.deleted_pages} 页、${result.deleted_knowledge_nodes} 个知识点、${result.deleted_notes} 条笔记`,
+      )
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '课程删除失败')
+    } finally {
+      setCourseActionSaving(false)
+    }
+  }
+
   async function handleCreateCourse(event: FormEvent) {
     event.preventDefault()
     if (!newCourseName.trim()) return
@@ -325,7 +391,12 @@ function App() {
         <button className="rail-button" title="课程资料" aria-label="定位到课程资料" onClick={() => focusWorkspaceSection('course-materials')}>
           <TechIcon name="materials" />
         </button>
-        <button className="rail-button rail-button-bottom" title="设置（后续开放）" aria-label="设置（后续开放）" disabled>
+        <button
+          className={`rail-button rail-button-bottom ${settingsOpen ? 'rail-button-active' : ''}`}
+          title="设置"
+          aria-label="打开设置"
+          onClick={() => setSettingsOpen(true)}
+        >
           <TechIcon name="settings" />
         </button>
       </aside>
@@ -359,6 +430,17 @@ function App() {
               className={`course-card ${course.id === selectedCourseId ? 'course-card-active' : ''}`}
               key={course.id}
               onClick={() => setSelectedCourseId(course.id)}
+              onContextMenu={(event) => {
+                event.preventDefault()
+                setSelectedCourseId(course.id)
+                setContextMenu({
+                  x: event.clientX,
+                  y: event.clientY,
+                  courseId: course.id,
+                  courseName: course.name,
+                })
+              }}
+              title={`${course.name}（右键可重命名或删除）`}
             >
               <span className="course-icon"><TechIcon name="overview" size={17} /></span>
               <span>
@@ -419,6 +501,13 @@ function App() {
           <div className="alert" role="alert">
             <span>{error}</span>
             <button onClick={() => setError(undefined)}>关闭</button>
+          </div>
+        )}
+
+        {deleteNotice && (
+          <div className="notice" role="status">
+            <span>{deleteNotice}</span>
+            <button onClick={() => setDeleteNotice(undefined)}>关闭</button>
           </div>
         )}
 
@@ -710,6 +799,37 @@ function App() {
           </aside>
         </section>
       </main>
+
+      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+
+      <CourseContextMenu
+        state={contextMenu}
+        onClose={() => setContextMenu(null)}
+        onRename={(courseId, courseName) => {
+          setContextMenu(null)
+          setCourseAction({ kind: 'rename', courseId, courseName })
+        }}
+        onDelete={(courseId, courseName) => {
+          setContextMenu(null)
+          setCourseAction({ kind: 'delete', courseId, courseName })
+        }}
+      />
+
+      <RenameCourseDialog
+        open={courseAction?.kind === 'rename'}
+        initialName={courseAction?.courseName ?? ''}
+        saving={courseActionSaving}
+        onSubmit={(name) => void handleRenameCourse(name)}
+        onCancel={() => setCourseAction(undefined)}
+      />
+
+      <DeleteCourseDialog
+        open={courseAction?.kind === 'delete'}
+        courseName={courseAction?.courseName ?? ''}
+        saving={courseActionSaving}
+        onConfirm={() => void handleDeleteCourse()}
+        onCancel={() => setCourseAction(undefined)}
+      />
     </div>
   )
 }
