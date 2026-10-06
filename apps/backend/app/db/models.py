@@ -44,7 +44,20 @@ class Course(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
 
+    # 除了 materials，其余关联表只有 course_id 外键。显式声明 ORM 级联，
+    # 这样即使引擎未开启 SQLite 外键（tests / 迁移脚本 / 换库），
+    # 删课程也不会留下孤儿知识点、笔记或检索块。
     materials: Mapped[list[Material]] = relationship(
+        back_populates="course", cascade="all, delete-orphan"
+    )
+    knowledge_nodes: Mapped[list[KnowledgeNode]] = relationship(
+        back_populates="course", cascade="all, delete-orphan"
+    )
+    notes: Mapped[list[Note]] = relationship(back_populates="course", cascade="all, delete-orphan")
+    knowledge_edges: Mapped[list[KnowledgeEdge]] = relationship(
+        back_populates="course", cascade="all, delete-orphan"
+    )
+    retrieval_chunks: Mapped[list[RetrievalChunk]] = relationship(
         back_populates="course", cascade="all, delete-orphan"
     )
 
@@ -160,7 +173,7 @@ class KnowledgeNode(Base):
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now, nullable=False)
 
-    course: Mapped[Course] = relationship()
+    course: Mapped[Course] = relationship(back_populates="knowledge_nodes")
     note: Mapped[Note | None] = relationship(back_populates="knowledge_node", uselist=False)
     source_refs: Mapped[list[SourceRef]] = relationship(
         secondary=knowledge_node_source_refs, back_populates="knowledge_nodes"
@@ -202,7 +215,7 @@ class KnowledgeEdge(Base):
     created_by: Mapped[str] = mapped_column(String(30), default="system", nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
 
-    course: Mapped[Course] = relationship()
+    course: Mapped[Course] = relationship(back_populates="knowledge_edges")
     source_node: Mapped[KnowledgeNode] = relationship(
         foreign_keys=[source_node_id], back_populates="outgoing_edges"
     )
@@ -228,7 +241,7 @@ class Note(Base):
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now, nullable=False)
 
-    course: Mapped[Course] = relationship()
+    course: Mapped[Course] = relationship(back_populates="notes")
     knowledge_node: Mapped[KnowledgeNode] = relationship(back_populates="note")
     revisions: Mapped[list[NoteRevision]] = relationship(
         back_populates="note", cascade="all, delete-orphan", order_by="NoteRevision.revision_number"
@@ -267,5 +280,5 @@ class RetrievalChunk(Base):
     embedding_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
 
-    course: Mapped[Course] = relationship()
+    course: Mapped[Course] = relationship(back_populates="retrieval_chunks")
     page_block: Mapped[PageBlock] = relationship(back_populates="retrieval_chunk")
