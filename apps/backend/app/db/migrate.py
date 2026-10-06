@@ -34,7 +34,7 @@ PHASE_TWO_COLUMNS = {
 PHASE_THREE_TABLES = {
     "conversations", "conversation_messages", "message_evidence",
     "knowledge_proposals", "knowledge_changes", "note_suggestions",
-    "feedback", "backup_records",
+    "feedback", "backup_records", "provider_calls",
 }
 LEGACY_COLUMNS = {
     "materials": {"topic_title": "VARCHAR(200)"},

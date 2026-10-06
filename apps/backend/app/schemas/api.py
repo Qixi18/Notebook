@@ -21,7 +21,7 @@ from app.schemas.conversations import (
 )
 from app.schemas.courses import CourseCreate, CourseRead, DeletionPreview
 from app.schemas.coverage import CoverageLocation, CoverageRead
-from app.schemas.feedback import FeedbackCreate, FeedbackRead
+from app.schemas.feedback import FeedbackCreate, FeedbackRead, FeedbackUpdate
 from app.schemas.jobs import JobRead
 from app.schemas.knowledge import (
     KnowledgeChangeRead,
@@ -42,6 +42,7 @@ from app.schemas.materials import (
 )
 from app.schemas.notes import NoteRead, NoteRevisionRead, NoteUpdate
 from app.schemas.proposals import KnowledgeProposalRead, NoteSuggestionRead, ProposalReview
+from app.schemas.provider import ProviderCallRead
 from app.schemas.terms import TermExplanationRequest, TermExplanationResponse, TermExplanationSource
 
 __all__ = [
@@ -64,6 +65,7 @@ __all__ = [
     'DeletionPreview',
     'FeedbackCreate',
     'FeedbackRead',
+    'FeedbackUpdate',
     'JobRead',
     'KnowledgeChangeRead',
     'KnowledgeEdgeRead',
@@ -81,6 +83,7 @@ __all__ = [
     'PageEvidenceRead',
     'PageRead',
     'ProposalReview',
+    'ProviderCallRead',
     'RestoreRequest',
     'SourceRefRead',
     'TermExplanationRequest',

@@ -9,6 +9,17 @@ type Diagnostics = {
   providers?: Record<string, { status?: string; configured?: boolean }>
   limits?: { max_upload_bytes?: number; max_pages?: number; allowed_extensions?: string[] }
   security?: { bind_address?: string; secrets_in_response?: boolean; backup_excludes_env?: boolean }
+  provider_calls?: Array<{
+    id: string
+    provider: string
+    operation: string
+    status: string
+    duration_ms?: number | null
+    request_units?: number | null
+    response_units?: number | null
+    estimated_cost_usd?: number | null
+    created_at: string
+  }>
 }
 
 function statusLabel(value: string | undefined): string {
@@ -54,6 +65,12 @@ export function DiagnosticsPanel() {
           <div><dt>上传限制</dt><dd>{diagnostics.limits?.max_upload_bytes ? `${Math.round(diagnostics.limits.max_upload_bytes / (1024 * 1024))} MB` : '未返回'} · {diagnostics.limits?.max_pages ?? '—'} 页</dd></div>
           <div><dt>安全边界</dt><dd>{diagnostics.security?.bind_address ?? '未返回'} · 密钥不出响应/备份</dd></div>
         </dl>
+        <div className="diagnostics-call-history" aria-label="外部服务调用记录">
+          <div className="panel-heading"><strong>最近外部调用</strong><span>{diagnostics.provider_calls?.length ?? 0} 条</span></div>
+          {diagnostics.provider_calls?.length ? <ul>
+            {diagnostics.provider_calls.slice(0, 8).map((call) => <li key={call.id}><span>{call.provider} · {call.operation}</span><small>{call.status} · {call.duration_ms ?? '—'} ms · {call.estimated_cost_usd == null ? '费用待配置' : `$${call.estimated_cost_usd.toFixed(6)}`}</small></li>)}
+          </ul> : <p className="muted-copy">尚无外部服务调用记录。</p>}
+        </div>
       </> : <p className="muted-copy">正在读取本机诊断信息…</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
     </section>

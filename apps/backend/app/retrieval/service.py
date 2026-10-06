@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Material, MaterialPage, PageBlock, RetrievalChunk, SourceRef
 from app.retrieval.embedding import EmbeddingClient, EmbeddingError
+from app.services.provider_audit import begin_call, finish_call, provider_status_from_error
 
 
 @dataclass(frozen=True)
@@ -46,10 +47,28 @@ def index_material(db: Session, material_id: str) -> None:
     vectors: list[list[float]] = []
     texts = [block.content.strip() for block in blocks]
     if client.configured and texts:
+        audit, started = begin_call(
+            db,
+            provider="embedding",
+            operation="index_material",
+            course_id=material.course_id,
+            material_id=material.id,
+            model=client.settings.embedding_model,
+            request_units=len(texts),
+        )
         try:
             vectors = client.embed(texts)
-        except EmbeddingError:
+        except EmbeddingError as exc:
+            finish_call(
+                db,
+                audit,
+                started,
+                status=provider_status_from_error(exc),
+                error_type=type(exc).__name__,
+            )
             vectors = []
+        else:
+            finish_call(db, audit, started, status="success", response_units=len(vectors))
 
     for index, block in enumerate(blocks):
         chunk = db.scalar(select(RetrievalChunk).where(RetrievalChunk.page_block_id == block.id))
@@ -98,10 +117,27 @@ def retrieve(
     query_vector: list[float] | None = None
     client = EmbeddingClient()
     if client.configured:
+        audit, started = begin_call(
+            db,
+            provider="embedding",
+            operation="embed_query",
+            course_id=course_id,
+            model=client.settings.embedding_model,
+            request_units=1,
+        )
         try:
             query_vector = client.embed([question])[0]
-        except EmbeddingError:
+        except EmbeddingError as exc:
+            finish_call(
+                db,
+                audit,
+                started,
+                status=provider_status_from_error(exc),
+                error_type=type(exc).__name__,
+            )
             query_vector = None
+        else:
+            finish_call(db, audit, started, status="success", response_units=1)
     results: list[RetrievedChunk] = []
     for chunk, block, page, material, source_id in db.execute(query).all():
         text = chunk.text.strip()

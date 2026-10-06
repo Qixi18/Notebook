@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
 
@@ -9,7 +10,9 @@ from app.core.config import settings
 
 
 class WebSearchError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 def configured() -> bool:
@@ -37,6 +40,11 @@ def search(query: str, *, max_results: int = 5) -> list[dict[str, Any]]:
         )
         response.raise_for_status()
         payload = response.json()
+    except httpx.HTTPStatusError as exc:
+        raise WebSearchError(
+            f"联网搜索暂不可用：HTTP {exc.response.status_code}",
+            status_code=exc.response.status_code,
+        ) from exc
     except (httpx.HTTPError, ValueError) as exc:
         raise WebSearchError(f"联网搜索暂不可用：{type(exc).__name__}") from exc
 
@@ -55,5 +63,6 @@ def search(query: str, *, max_results: int = 5) -> list[dict[str, Any]]:
             "snippet": str(item.get("content") or "")[:3000],
             "score": item.get("score") if isinstance(item.get("score"), (int, float)) else None,
             "published_at": str(item.get("published_date") or "")[:100] or None,
+            "retrieved_at": datetime.now(UTC),
         })
     return results

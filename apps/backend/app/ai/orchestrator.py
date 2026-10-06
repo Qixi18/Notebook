@@ -15,6 +15,12 @@ from app.core.config import settings
 from app.db.models import Material, WebSource
 from app.retrieval.rerank import rerank
 from app.retrieval.service import RetrievedChunk, build_context, retrieve
+from app.services.provider_audit import (
+    begin_call,
+    estimate_token_cost,
+    finish_call,
+    provider_status_from_error,
+)
 from app.web_search.policy import (
     SearchPolicy,
     cache_search,
@@ -52,6 +58,7 @@ def run_answer(
     from app.web_search.tavily import search as web_search
     needs_web = not chunks or not any(chunk.direct_support for chunk in chunks)
     if allowed and web_search_configured() and needs_web:
+        audit = None
         try:
             scope = f" {selected_material.lecture_title}" if selected_material else ""
             search_query = f"{course_name}{scope} {question}"
@@ -59,10 +66,20 @@ def run_answer(
             if cached_results is not None:
                 web_results = cached_results
             else:
+                audit, started = begin_call(
+                    db,
+                    provider="tavily",
+                    operation="search",
+                    course_id=course_id,
+                    model="tavily-basic",
+                    request_units=1,
+                    metadata={"max_results": policy.max_results, "query_length": len(search_query)},
+                )
                 record_search()
                 web_results = [item for item in web_search(search_query, max_results=policy.max_results)]
                 web_results = review_results(web_results)["results"]
                 cache_search(search_query, web_results)
+                finish_call(db, audit, started, status="success", response_units=len(web_results))
             web_status = "completed" if web_results else "no_results"
             for item in web_results:
                 if db.scalar(select(WebSource.id).where(WebSource.course_id == course_id, WebSource.url == item["url"])) is None:
@@ -78,12 +95,31 @@ def run_answer(
                         published_at=item.get("published_at"),
                     ))
             db.flush()
-        except WebSearchError:
+        except WebSearchError as exc:
+            if audit is not None:
+                finish_call(
+                    db,
+                    audit,
+                    started,
+                    status=provider_status_from_error(exc),
+                    error_type=type(exc).__name__,
+                )
             web_status = "failed"
     elif not allow_web:
         web_status = "disabled_by_request"
     elif reason == "daily_limit":
         web_status = "daily_limit"
+        if needs_web and web_search_configured():
+            audit, started = begin_call(
+                db,
+                provider="tavily",
+                operation="search",
+                course_id=course_id,
+                model="tavily-basic",
+                request_units=0,
+                metadata={"reason": reason},
+            )
+            finish_call(db, audit, started, status="rate_limited")
     elif needs_web and not web_search_configured():
         web_status = "unavailable"
 
@@ -108,6 +144,13 @@ def run_answer(
     ) if part)
     client = DeepSeekClient()
     if client.configured:
+        audit, started = begin_call(
+            db,
+            provider="deepseek",
+            operation="chat_completion",
+            course_id=course_id,
+            model=settings.deepseek_model,
+        )
         try:
             response = client.complete_json(
                 build_answer_messages(
@@ -119,6 +162,20 @@ def run_answer(
                 max_tokens=2400,
             )
             answer = str(response.get("answer_markdown") or "").strip()
+            usage = client.last_usage or {}
+            finish_call(
+                db,
+                audit,
+                started,
+                status="success",
+                request_units=usage.get("prompt_tokens"),
+                response_units=usage.get("completion_tokens"),
+                estimated_cost_usd=estimate_token_cost(
+                    usage,
+                    input_rate_per_million=settings.deepseek_input_cost_per_million,
+                    output_rate_per_million=settings.deepseek_output_cost_per_million,
+                ),
+            )
             if answer:
                 claims = extract_claims(answer, chunks, web_results)
                 return {"answer": answer, "chunks": chunks, "web_results": web_results,
@@ -127,7 +184,14 @@ def run_answer(
                         "learning_goal": teaching_context.learning_goal,
                         "discipline": teaching_context.discipline,
                         "model_version": settings.deepseek_model}
-        except DeepSeekError:
+        except DeepSeekError as exc:
+            finish_call(
+                db,
+                audit,
+                started,
+                status=provider_status_from_error(exc),
+                error_type=type(exc).__name__,
+            )
             pass
     local_excerpt = "\n\n".join(
         f"[课程资料：{chunk.lecture_title} | {chunk.location_label or f'第 {chunk.page_number} 页'}] {chunk.text[:240]}"

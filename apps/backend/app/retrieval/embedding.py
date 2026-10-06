@@ -8,6 +8,10 @@ from app.core.config import Settings, settings
 class EmbeddingError(RuntimeError):
     """Raised when an optional embedding provider cannot answer."""
 
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
 
 class EmbeddingClient:
     def __init__(self, provider_settings: Settings = settings) -> None:
@@ -40,5 +44,10 @@ class EmbeddingClient:
             if len(vectors) != len(texts):
                 raise EmbeddingError("Embedding 返回数量与输入不一致")
             return vectors
+        except httpx.HTTPStatusError as exc:
+            raise EmbeddingError(
+                f"Embedding 服务调用失败：HTTP {exc.response.status_code}",
+                status_code=exc.response.status_code,
+            ) from exc
         except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as exc:
             raise EmbeddingError("Embedding 服务调用失败") from exc

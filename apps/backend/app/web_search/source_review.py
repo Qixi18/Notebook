@@ -26,7 +26,16 @@ def review_results(results: list[dict]) -> dict:
         title_key = " ".join(str(row.get("title") or "").casefold().split())
         if title_key:
             groups[title_key].append(row)
-    return {
-        "results": reviewed,
-        "conflict_groups": [items for items in groups.values() if len(items) > 1],
-    }
+    conflict_groups = []
+    conflict_index = 0
+    for items in groups.values():
+        unique_urls = {str(item.get("url") or "") for item in items}
+        if len(items) < 2 or len(unique_urls) < 2:
+            continue
+        conflict_index += 1
+        group_id = f"title-conflict-{conflict_index}"
+        for item in items:
+            item["conflict_group_id"] = group_id
+            item["review_warning"] += "；同标题存在多个来源，需人工核对是否矛盾"
+        conflict_groups.append(items)
+    return {"results": reviewed, "conflict_groups": conflict_groups}

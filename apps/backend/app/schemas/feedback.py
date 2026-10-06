@@ -25,3 +25,8 @@ class FeedbackRead(BaseModel):
     resolution: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class FeedbackUpdate(BaseModel):
+    status: str = Field(pattern="^(open|reviewing|resolved|rejected)$")
+    resolution: str | None = Field(default=None, max_length=5000)

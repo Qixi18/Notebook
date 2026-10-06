@@ -11,10 +11,15 @@ from app.core.config import Settings, settings
 class DeepSeekError(RuntimeError):
     """Raised when the configured DeepSeek provider cannot return a result."""
 
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
 
 class DeepSeekClient:
     def __init__(self, provider_settings: Settings = settings) -> None:
         self.settings = provider_settings
+        self.last_usage: dict[str, int] | None = None
 
     @property
     def configured(self) -> bool:
@@ -53,11 +58,24 @@ class DeepSeekClient:
             )
             response.raise_for_status()
             body = response.json()
+            usage = body.get("usage")
+            self.last_usage = {
+                key: int(usage[key])
+                for key in ("prompt_tokens", "completion_tokens", "total_tokens")
+                if isinstance(usage, dict) and isinstance(usage.get(key), (int, float))
+            } or None
             content = body["choices"][0]["message"]["content"]
             if not isinstance(content, str) or not content.strip():
                 raise DeepSeekError("DeepSeek 返回了空内容")
             return content.strip()
+        except httpx.HTTPStatusError as exc:
+            self.last_usage = None
+            raise DeepSeekError(
+                f"DeepSeek 调用失败：HTTP {exc.response.status_code}",
+                status_code=exc.response.status_code,
+            ) from exc
         except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as exc:
+            self.last_usage = None
             raise DeepSeekError(f"DeepSeek 调用失败：{type(exc).__name__}") from exc
 
     def complete_json(

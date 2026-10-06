@@ -10,15 +10,15 @@
 | F-04 知识点提取与跨讲整合 | `knowledge/matcher.py`、`extractor.py`、`proposals.py`、`KnowledgeChange`；`test_phase_three_four.py` | 上传后查看新增/重复/深化提案，确认或拒绝 | 连续 3 讲逐项人工标注新增、重复、深化、关联 | 本地事务和保护路径已实现；语义质量待标注验收 |
 | F-05 问题输入与连续追问 | `conversations.py`、有限历史窗口、幂等键、课程范围校验；`test_phase_three_four.py` | 创建会话、连续提问、刷新后重开会话 | 真实课程连续追问，核对历史窗口不串课 | 本地持久会话已实现；真实回答质量待测 |
 | F-06 学科自适应讲解 | `app/ai/discipline.py`、学习目标进入提示；`test_discipline.py` | 选择“理解概念/复习/练习/比较”，观察答疑状态 | 数学、工程/AI、社会科学各 1 个真实问题 | 规则分类和接口已实现；外部模型真实适配待测 |
-| F-07 联网搜索与知识库检索 | `retrieval/service.py`、`evaluation.py`、`web_search/policy.py`、`tavily.py`、`source_review.py` | 课程有依据、无依据、关闭联网、联网失败各操作一次 | Tavily 真实成功/超时/限流；记录查询次数、耗时、费用和冲突样例 | 降级、缓存和限额已实现；冲突判断和真实来源质量待补 |
+| F-07 联网搜索与知识库检索 | `retrieval/service.py`、`evaluation.py`、`web_search/policy.py`、`tavily.py`、`source_review.py`、`ProviderCall` | 课程有依据、无依据、关闭联网、联网失败各操作一次 | Tavily 真实成功/超时/限流；记录查询次数、耗时、费用和冲突样例 | 代码已具备降级、缓存、限额、冲突标记和调用审计；真实来源质量待补 |
 | F-08 来源和证据标记 | `ai/evidence.py`、`MessageEvidence`、稳定 `source_ref_id`、结论分类；`test_assistant_evidence.py`、`test_retrieval_evaluation.py` | 查看课件/网络/通用解释/模型推断标签，并打开来源 | 至少 30 条来源人工抽查，目标准确率 ≥95% | 结论映射基线已实现；30 条真实抽查未完成 |
 | F-09 术语原文说明 | `api/v1/terms.py`、课程原文命中来源和不确定性；`test_terms.py` | 输入课程内术语和未命中术语，查看来源与不确定提示 | 不同学科真实术语样本，核对原文/译法/语境 | 课程命中与无依据降级已实现；常见译法外部联调待补 |
 | F-10 知识树与跨分支关联 | `knowledge/relations.py`、图接口、循环/自环/跨课校验；知识树前端关系视图 | 展开树、切换关系视图、键盘选择节点、查看变更历史 | 连续 3 讲核对节点、边、来源和待解析关系 | 本地图结构和展示已实现；真实树生长质量待测 |
 | F-11 知识点笔记 | `notes/service.py`、版本号、`NoteSuggestion`、来源映射；`test_learning_features.py` | 编辑并锁定笔记，查看建议差异，确认/拒绝 AI 建议 | 不少于 10 条用户编辑笔记，重传/重解析静默覆盖必须为 0 | 已修正为建议先行；10 条真实回归待完成 |
 | F-12 课件覆盖总览 | `services/coverage.py`、覆盖 API 与资料页入口；阶段二接口测试 | 逐页查看已覆盖/待检查并回跳来源 | 真实课件逐页抽查，核对 30 条来源 | 本地覆盖计算已实现；真实准确率待测 |
 | F-13 应用内答疑教师 | `TeacherCharacter`、首页/答疑页页面式教师、`docs/scope-changes.md` | 加载/思考/讲解/错误状态，窄窗口和减少动效操作 | 按当前页面式方案验收；旧版悬浮桌宠不计入本阶段 | 页面式方案已实现；需在最终需求版本统一口径 |
-| F-14 反馈与纠错 | `services/feedback.py`、反馈 API、去重约束、知识/笔记确认接口；`test_phase_three_four.py` | 对回答点“有帮助/需改进”，查看已保存状态；审查建议 | 人工检查反馈列表、处理状态和历史版本不被暗改 | 本地闭环已实现；处理流程人工验收待补 |
-| F-15 本地模型与搜索配置 | `config.py`、`service_checks.py`、诊断 API、密钥脱敏；配置接口测试 | 配置诊断、主动测试 DeepSeek/Embedding/Tavily/OCR | 真实服务成功/认证失败/超时/限流，记录费用 | 配置状态和限频已实现；外部真实调用待补 |
+| F-14 反馈与纠错 | `services/feedback.py`、反馈 API、状态更新接口、去重约束、知识/笔记确认接口；`test_phase_three_four.py` | 对回答点“有帮助/需改进”，查看已保存状态；审查建议 | 人工检查反馈列表、处理状态和历史版本不被暗改 | 本地记录、去重和处理状态接口已实现；浏览器流程待验收 |
+| F-15 本地模型与搜索配置 | `config.py`、`service_checks.py`、`provider_audit.py`、诊断 API、密钥脱敏；配置接口测试 | 配置诊断、主动测试 DeepSeek/Embedding/Tavily/OCR | 真实服务成功/认证失败/超时/限流，记录费用 | 代码已具备状态、限频和脱敏调用审计；外部真实调用待补 |
 
 ## 自动检查入口
 
@@ -27,7 +27,7 @@ cd Notebook
 ./scripts/test.ps1
 ```
 
-当前自动检查覆盖后端 Ruff、后端 pytest、桌面端 TypeScript 构建和 Web TypeScript/Vite 构建。Web 构建目前仍有约 804 KB 单块体积警告，需要在性能验收中记录拆分前后真实加载时间。
+当前自动检查覆盖后端 Ruff、后端 pytest、桌面端 TypeScript 构建和 Web TypeScript/Vite 构建。Web 已配置 React/Markdown 手工拆包；实际产物大小和真实加载时间仍需在性能验收中记录。
 
 ## 必须补齐的正式证据
 

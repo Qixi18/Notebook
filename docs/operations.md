@@ -4,6 +4,8 @@
 
 从仓库根目录执行 `./scripts/dev.ps1`。脚本会先检查 8000/5173 端口、迁移 SQLite，再启动 API、任务执行器和 Vite；服务只监听本机地址，退出时会清理启动的子进程。手动运行时必须同时启动 `uv run python -m app.workers.runner`。
 
+配置诊断页和 `GET /api/v1/config/provider-calls` 会显示脱敏的外部服务调用记录，包括状态、耗时、用量和可选的费用估算。费用估算只有在 `.env` 配置 `DEEPSEEK_*_COST_PER_MILLION` 后才会出现；记录不保存请求正文、密钥或完整课件。
+
 ## 备份
 
 阶段一检查点仍可用：`./scripts/backup.ps1`。阶段四完整包使用：

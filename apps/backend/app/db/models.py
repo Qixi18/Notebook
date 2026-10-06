@@ -533,3 +533,34 @@ class BackupRecord(Base):
     completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     course: Mapped[Course | None] = relationship(back_populates="backup_records")
+
+
+class ProviderCall(Base):
+    """Redacted audit record for an optional external provider call."""
+
+    __tablename__ = "provider_calls"
+    __table_args__ = (
+        Index("ix_provider_calls_provider_created", "provider", "created_at"),
+        Index("ix_provider_calls_course_created", "course_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    operation: Mapped[str] = mapped_column(String(80), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    course_id: Mapped[str | None] = mapped_column(
+        ForeignKey("courses.id", ondelete="SET NULL"), nullable=True
+    )
+    material_id: Mapped[str | None] = mapped_column(
+        ForeignKey("materials.id", ondelete="SET NULL"), nullable=True
+    )
+    model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    request_units: Mapped[int | None] = mapped_column(nullable=True)
+    response_units: Mapped[int | None] = mapped_column(nullable=True)
+    estimated_cost_usd: Mapped[float | None] = mapped_column(nullable=True)
+    duration_ms: Mapped[float | None] = mapped_column(nullable=True)
+    error_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    started_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)

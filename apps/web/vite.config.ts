@@ -10,5 +10,15 @@ export default defineConfig({
       '/api': 'http://127.0.0.1:8000',
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+          markdown: ['react-markdown', 'remark-math', 'rehype-katex', 'katex'],
+        },
+      },
+    },
+  },
 })
 

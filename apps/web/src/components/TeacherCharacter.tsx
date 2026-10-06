@@ -18,7 +18,7 @@ export function TeacherCharacter({ status = 'idle', compact = false }: { status?
   return (
     <div className={`teacher-character teacher-character-${status}${compact ? ' teacher-character-compact' : ''}`} role="img" aria-label={`NoteBuddy AI 精灵教师：${statusLabels[status]}`}>
       <div className="teacher-character-halo" aria-hidden="true" />
-      <img className="teacher-character-image" src={statusAssets[status]} alt="" />
+      <img className="teacher-character-image" src={statusAssets[status]} alt="" loading="lazy" decoding="async" />
       <span className="teacher-character-label" aria-live="polite">{statusLabels[status]}</span>
     </div>
   )

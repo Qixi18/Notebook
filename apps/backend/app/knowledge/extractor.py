@@ -22,6 +22,12 @@ from app.knowledge.matcher import find_candidates, normalize_name
 from app.knowledge.proposals import create_knowledge_proposal, create_note_suggestion
 from app.knowledge.relations import add_relation
 from app.notes.renderer import render_note_markdown
+from app.services.provider_audit import (
+    begin_call,
+    estimate_token_cost,
+    finish_call,
+    provider_status_from_error,
+)
 
 ALLOWED_RELATIONS = {"related", "prerequisite", "deepens"}
 
@@ -42,17 +48,25 @@ def extract_material_knowledge(db: Session, material_id: str) -> list[KnowledgeN
     ).all())
 
     created_or_updated: list[KnowledgeNode] = []
+    relation_queue: list[tuple[KnowledgeNode, object]] = []
     for page in pages:
         if not page.raw_text.strip():
             continue
 
         source_refs = ensure_source_refs(db, page.blocks, parser_version=material.parser_version)
-        draft = extract_page_draft(page.title or f"第 {page.page_number} 页", page.raw_text)
+        draft = extract_page_draft(
+            page.title or f"第 {page.page_number} 页",
+            page.raw_text,
+            db=db,
+            course_id=material.course_id,
+            material_id=material.id,
+        )
         title = clean_title(str(draft.get("title") or page.title or f"第 {page.page_number} 页"))
         summary = str(draft.get("summary") or "").strip()
         candidates = find_candidates(db, course_id=material.course_id, name=title, summary=summary)
         best = candidates[0] if candidates else None
-        if best and best.score >= 0.72 and normalize_name(best.node.name) != normalize_name(title):
+        exact_candidate = bool(best and normalize_name(best.node.name) == normalize_name(title))
+        if best and best.score >= 0.72 and not exact_candidate:
             create_knowledge_proposal(
                 db,
                 course_id=material.course_id,
@@ -69,7 +83,7 @@ def extract_material_knowledge(db: Session, material_id: str) -> list[KnowledgeN
             # Keep the source page searchable while requiring a person to decide
             # whether the new material deepens the existing node.
             continue
-        node = db.scalar(
+        node = best.node if exact_candidate else db.scalar(
             select(KnowledgeNode).where(
                 KnowledgeNode.course_id == material.course_id,
                 KnowledgeNode.name == title,
@@ -97,17 +111,21 @@ def extract_material_knowledge(db: Session, material_id: str) -> list[KnowledgeN
             material_id=material.id,
             candidate_name=title,
             candidate_summary=summary,
-            kind="repeat" if best else "new",
-            confidence=1.0 if best else 0.0,
-            rationale="名称完全一致，已自动补充来源。" if best else "课程中没有相似知识点，已自动创建。",
+            kind="repeat" if exact_candidate else "new",
+            confidence=1.0 if exact_candidate else 0.0,
+            rationale="名称规范化后一致，已自动补充来源。" if exact_candidate else "课程中没有达到合并阈值的相似知识点，已创建候选。",
             source_ids=[source.id for source in source_refs],
             target_node_id=node.id,
             status="auto_applied",
             proposed_delta={"summary": summary},
         )
-        ensure_relations(db, material.course_id, node, draft.get("relations"))
+        relation_queue.append((node, draft.get("relations")))
         created_or_updated.append(node)
 
+    # Resolve all nodes in this material first, then create edges or pending
+    # relation proposals so a page order cannot silently drop a valid edge.
+    for node, raw_relations in relation_queue:
+        ensure_relations(db, material.course_id, node, raw_relations)
     return created_or_updated
 
 
@@ -139,16 +157,58 @@ def ensure_source_refs(
     return refs
 
 
-def extract_page_draft(title: str, text: str) -> dict[str, Any]:
+def extract_page_draft(
+    title: str,
+    text: str,
+    *,
+    db: Session | None = None,
+    course_id: str | None = None,
+    material_id: str | None = None,
+) -> dict[str, Any]:
     client = DeepSeekClient()
     if client.configured:
+        audit = None
+        started = None
+        if db is not None:
+            audit, started = begin_call(
+                db,
+                provider="deepseek",
+                operation="extract_page_draft",
+                course_id=course_id,
+                material_id=material_id,
+                model=client.settings.deepseek_model,
+                metadata={"input_characters": len(text[:12000])},
+            )
         try:
             draft = client.complete_json(
                 build_note_extraction_messages(title, text[:12000]), max_tokens=2400
             )
+            if audit is not None and started is not None:
+                usage = client.last_usage or {}
+                finish_call(
+                    db,
+                    audit,
+                    started,
+                    status="success",
+                    request_units=usage.get("prompt_tokens"),
+                    response_units=usage.get("completion_tokens"),
+                    estimated_cost_usd=estimate_token_cost(
+                        usage,
+                        input_rate_per_million=client.settings.deepseek_input_cost_per_million,
+                        output_rate_per_million=client.settings.deepseek_output_cost_per_million,
+                    ),
+                )
             if isinstance(draft, dict):
                 return draft
-        except DeepSeekError:
+        except DeepSeekError as exc:
+            if audit is not None and started is not None:
+                finish_call(
+                    db,
+                    audit,
+                    started,
+                    status=provider_status_from_error(exc),
+                    error_type=type(exc).__name__,
+                )
             pass
     return fallback_page_draft(title, text)
 

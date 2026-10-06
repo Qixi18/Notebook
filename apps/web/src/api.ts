@@ -10,7 +10,7 @@ import { backupApi } from './api/backup'
 import { termsApi } from './api/terms'
 
 export { ApiError } from './api/http'
-export type { Capabilities, OCRStatus, ProviderStatus } from './api/config'
+export type { Capabilities, OCRStatus, ProviderCall, ProviderStatus } from './api/config'
 
 export const api = {
   ...courseApi,

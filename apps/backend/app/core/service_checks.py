@@ -5,10 +5,12 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import httpx
+from sqlalchemy.orm import Session
 
 from app.ai.deepseek import DeepSeekClient
 from app.core.config import settings
 from app.retrieval.embedding import EmbeddingClient
+from app.services.provider_audit import begin_call, finish_call, provider_status_from_error
 from app.web_search.tavily import search
 
 LAST_RESULTS: dict[str, dict] = {}
@@ -51,13 +53,23 @@ def _error_status(exc: Exception) -> str:
     return "unavailable"
 
 
-def check_provider(provider: str) -> dict:
+def check_provider(provider: str, db: Session | None = None) -> dict:
     if not _configured(provider):
         return provider_status(provider)
     now = datetime.now(UTC)
     prior = LAST_RESULTS.get(provider)
     if prior and now - prior["checked_at"] < MIN_INTERVAL:
         return provider_status(provider)
+    audit = None
+    started = None
+    if db is not None:
+        audit, started = begin_call(
+            db,
+            provider=provider,
+            operation="connectivity_check",
+            model=(settings.deepseek_model if provider == "deepseek" else settings.embedding_model if provider == "embedding" else "tavily-basic"),
+            request_units=1,
+        )
     try:
         if provider == "deepseek":
             DeepSeekClient().complete([{"role": "user", "content": "请回复 OK"}], max_tokens=8)
@@ -68,5 +80,16 @@ def check_provider(provider: str) -> dict:
         status = "connected"
     except Exception as exc:
         status = _error_status(exc)
+        if audit is not None and started is not None:
+            finish_call(
+                db,
+                audit,
+                started,
+                status=provider_status_from_error(exc),
+                error_type=type(exc).__name__,
+            )
+    else:
+        if audit is not None and started is not None:
+            finish_call(db, audit, started, status="success", response_units=1)
     LAST_RESULTS[provider] = {"status": status, "checked_at": now}
     return provider_status(provider)

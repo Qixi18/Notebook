@@ -7,8 +7,8 @@
 | 上传 | `POST /courses/{course_id}/materials` | 只保存文件并创建 `pending` 任务，返回资料和任务；执行器异步处理。支持可选 `Idempotency-Key` 请求头和 `allow_duplicate` 表单字段 |
 | 查询任务 | `GET /jobs/{job_id}`、`GET /materials/{material_id}/latest-job` | 返回状态、阶段、进度、错误码、错误消息、尝试次数 |
 | 重试 | `POST /materials/{material_id}/retry` | 仅失败任务可重试；新建待处理任务，原文件保留 |
-| 配置状态 | `GET /config/status`、`GET /config/diagnostics` | 区分未配置、已配置未验证及本进程最近一次连接结果；诊断返回本地路径、限制和安全边界，不返回密钥 |
-| 主动测试 | `POST /config/check/{deepseek\|embedding\|tavily}` | 用户主动触发单次最小调用；每服务至少间隔 1 分钟；可能产生费用 |
+| 配置状态 | `GET /config/status`、`GET /config/diagnostics`、`GET /config/provider-calls` | 区分未配置、已配置未验证及本进程最近一次连接结果；诊断返回本地路径、限制和脱敏的调用审计，不返回密钥 |
+| 主动测试 | `POST /config/check/{deepseek\|embedding\|tavily}` | 用户主动触发单次最小调用；每服务至少间隔 1 分钟；可能产生费用，并记录状态/耗时/用量 |
 | 课程移除 | `GET /courses/{course_id}/deletion-preview` → `DELETE /courses/{course_id}` → `POST /courses/{course_id}/restore` | 预览影响、删除前检查点、逻辑删除及恢复；有活动任务时拒绝 |
 | 资料移除 | `GET /materials/{material_id}/deletion-preview` → `DELETE /materials/{material_id}` → `POST /materials/{material_id}/restore` | 同上；原文件、知识节点、用户笔记仍保留 |
 | 恢复列表 | `GET /courses/deleted`、`GET /courses/{course_id}/deleted-materials` | 供本地 UI 显示可恢复对象 |
@@ -24,7 +24,7 @@
 | 知识提案 | `GET /courses/{course_id}/knowledge-proposals`、`POST /knowledge-proposals/{id}/review` | 相似但名称不同的跨讲候选进入待确认状态，确认后写入变更记录 |
 | 知识变更 | `GET /courses/{course_id}/knowledge-changes` | 查看新增、深化、来源补充和审核理由 |
 | 笔记建议 | `GET/POST /notes/{id}/suggestions`、`POST /notes/{id}/suggestions/{suggestion_id}/review` | AI 只写建议；用户确认后才生成用户版本 |
-| 反馈 | `POST/GET /courses/{course_id}/feedback` | 答案、笔记、提案和来源反馈按目标去重并验证课程归属 |
+| 反馈 | `POST/GET/PATCH /courses/{course_id}/feedback` | 答案、笔记、提案和来源反馈按目标去重并验证课程归属；PATCH 只更新人工处理状态和脱敏处理说明 |
 | 术语说明 | `POST /courses/{course_id}/terms/explain` | 返回原文、常见译法、学科语境和出处不确定性；未配置可核验服务时保守返回，不伪造词源 |
 
 答疑先检索课程内部资料；只有没有直接命中且策略允许时才调用联网搜索。回答来源按课件、网络补充、直接支持/相关支持分别标记。

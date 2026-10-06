@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.v1.shared import ensure_course
 from app.db.database import get_db
 from app.db.models import Feedback
-from app.schemas.api import FeedbackCreate, FeedbackRead
+from app.schemas.api import FeedbackCreate, FeedbackRead, FeedbackUpdate
 from app.services.feedback import save_feedback
 
 router = APIRouter()
@@ -35,3 +35,24 @@ def list_feedback(course_id: str, status: str | None = None, db: Session = Depen
     if status:
         query = query.where(Feedback.status == status)
     return list(db.scalars(query.order_by(Feedback.created_at.desc())).all())
+
+
+@router.patch("/courses/{course_id}/feedback/{feedback_id}", response_model=FeedbackRead)
+def update_feedback(
+    course_id: str,
+    feedback_id: str,
+    payload: FeedbackUpdate,
+    db: Session = Depends(get_db),
+) -> Feedback:
+    ensure_course(db, course_id)
+    feedback = db.scalar(select(Feedback).where(
+        Feedback.id == feedback_id,
+        Feedback.course_id == course_id,
+    ))
+    if feedback is None:
+        raise HTTPException(status_code=404, detail="反馈记录不存在")
+    feedback.status = payload.status
+    feedback.resolution = payload.resolution
+    db.commit()
+    db.refresh(feedback)
+    return feedback

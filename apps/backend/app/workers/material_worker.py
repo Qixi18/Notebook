@@ -21,6 +21,7 @@ from app.knowledge.proposals import create_note_suggestion
 from app.parsers.document import parse_document
 from app.parsers.ocr import ocr_pdf_page
 from app.retrieval.service import index_material
+from app.services.provider_audit import begin_call, finish_call, provider_status_from_error
 from app.services.sources import mark_pages_stale
 from app.web_search.tavily import WebSearchError
 from app.web_search.tavily import configured as web_search_configured
@@ -142,10 +143,35 @@ def process_material(job_id: str) -> None:
                 )
             ).all())
             found = 0
+            failed_search_query: str | None = None
             try:
                 for node in nodes[:8]:
                     node_sources: list[WebSource] = []
-                    for result in web_search(f"{node.name} {material.lecture_title}", max_results=2):
+                    search_query = f"{node.name} {material.lecture_title}"
+                    failed_search_query = search_query
+                    audit, started = begin_call(
+                        db,
+                        provider="tavily",
+                        operation="material_search",
+                        course_id=material.course_id,
+                        material_id=material.id,
+                        model="tavily-basic",
+                        request_units=1,
+                        metadata={"max_results": 2, "query_length": len(search_query)},
+                    )
+                    try:
+                        search_results = web_search(search_query, max_results=2)
+                    except WebSearchError as exc:
+                        finish_call(
+                            db,
+                            audit,
+                            started,
+                            status=provider_status_from_error(exc),
+                            error_type=type(exc).__name__,
+                        )
+                        raise
+                    finish_call(db, audit, started, status="success", response_units=len(search_results))
+                    for result in search_results:
                         if result.get("score") is not None and result["score"] < 0.35:
                             continue
                         existing = db.scalar(select(WebSource).where(WebSource.material_id == material.id, WebSource.url == result["url"]))
@@ -165,6 +191,24 @@ def process_material(job_id: str) -> None:
                 job = db.get(ProcessingJob, job_id)
                 job.web_search_status = "failed"
                 job.error_message = f"课件解析已完成；联网检索失败：{exc}"
+                if failed_search_query:
+                    audit, started = begin_call(
+                        db,
+                        provider="tavily",
+                        operation="material_search",
+                        course_id=material.course_id,
+                        material_id=material.id,
+                        model="tavily-basic",
+                        request_units=1,
+                        metadata={"query_length": len(failed_search_query), "recovered_after_rollback": True},
+                    )
+                    finish_call(
+                        db,
+                        audit,
+                        started,
+                        status=provider_status_from_error(exc),
+                        error_type=type(exc).__name__,
+                    )
                 db.commit()
         job.phase = "index"
         job.heartbeat_at = datetime.now(UTC)
