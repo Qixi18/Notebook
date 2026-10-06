@@ -3,9 +3,10 @@ import { api } from '../api'
 import { EmptyState } from '../components/EmptyState'
 import { CoverageGrid } from '../components/CoverageGrid'
 import { ProcessingStatus } from '../components/ProcessingStatus'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useWorkspace } from '../components/AppLayout'
 import type { Capabilities } from '../api/config'
-import type { Coverage, PageEvidence } from '../types'
+import type { Coverage, DeletionPreview, PageEvidence } from '../types'
 
 const statusLabels: Record<string, string> = { pending: '等待处理', processing: '解析中', completed: '已完成', failed: '解析失败' }
 
@@ -37,6 +38,9 @@ export function MaterialsPage() {
   const [coverage, setCoverage] = useState<Coverage>()
   const [pageEvidence, setPageEvidence] = useState<PageEvidence>()
   const [capabilities, setCapabilities] = useState<Capabilities>()
+  const [materialRemoval, setMaterialRemoval] = useState<{ id: string; impact: DeletionPreview }>()
+  const [deletionPreviewingId, setDeletionPreviewingId] = useState<string>()
+  const [deletingMaterialId, setDeletingMaterialId] = useState<string>()
 
   useEffect(() => {
     let active = true
@@ -52,14 +56,27 @@ export function MaterialsPage() {
   }, [course?.id, materials])
 
   async function deleteMaterial(id: string) {
+    if (deletionPreviewingId || deletingMaterialId) return
     try {
+      setDeletionPreviewingId(id)
       const impact = await api.previewMaterialDeletion(id)
       if (impact.active_jobs) throw new Error('资料仍在处理中，请完成后再移除。')
-      if (!window.confirm(`移除这份资料？将隐藏 ${impact.pages} 个页面和 ${impact.source_refs} 条来源；${impact.user_notes_protected} 条用户笔记受保护。操作前会备份，之后可恢复。`)) return
-      await api.deleteMaterial(id)
+      setMaterialRemoval({ id, impact })
+      setMaterialActionError(undefined)
+    } catch (cause) { setMaterialActionError(cause instanceof Error ? cause.message : '资料移除预览失败') }
+    finally { setDeletionPreviewingId(undefined) }
+  }
+
+  async function confirmMaterialRemoval() {
+    if (!materialRemoval || deletingMaterialId) return
+    try {
+      setDeletingMaterialId(materialRemoval.id)
+      await api.deleteMaterial(materialRemoval.id)
+      setMaterialRemoval(undefined)
       await refreshCurrentMaterials()
       setMaterialActionError(undefined)
     } catch (cause) { setMaterialActionError(cause instanceof Error ? cause.message : '资料移除失败') }
+    finally { setDeletingMaterialId(undefined) }
   }
 
   async function restoreMaterial(id: string) {
@@ -134,7 +151,7 @@ export function MaterialsPage() {
                   </button>
                   {material.status === 'failed' && <button className="material-retry-action" onClick={() => void retryMaterial(material.id)}>重试解析</button>}
                   {material.status === 'completed' && <button className="material-retry-action" onClick={() => void reparseMaterial(material.id)}>重新解析</button>}
-                  {(material.status === 'completed' || material.status === 'failed') && <button className="text-button" onClick={() => void deleteMaterial(material.id)}>移除资料</button>}
+                  {(material.status === 'completed' || material.status === 'failed') && <button className="text-button" disabled={Boolean(deletionPreviewingId || deletingMaterialId)} onClick={() => void deleteMaterial(material.id)}>{deletionPreviewingId === material.id ? '准备移除…' : '移除资料'}</button>}
                 </div>
               ))}
             </div>
@@ -162,6 +179,25 @@ export function MaterialsPage() {
           </div>
         )}
       </section>
+      {materialRemoval && <ConfirmDialog
+        eyebrow="课程资料管理"
+        title={`移除“${materials.find((item) => item.id === materialRemoval.id)?.lecture_title ?? '这份资料'}”？`}
+        description="资料会从当前列表隐藏，操作前自动备份；之后可在可恢复资料中恢复。受保护的用户笔记不会被删除。"
+        confirmLabel="确认移除资料"
+        cancelLabel="保留资料"
+        tone="danger"
+        pending={Boolean(deletingMaterialId)}
+        pendingLabel="正在移除…"
+        error={materialActionError}
+        onConfirm={() => void confirmMaterialRemoval()}
+        onCancel={() => setMaterialRemoval(undefined)}
+      >
+        <div className="deletion-impact" aria-label="移除影响范围">
+          <span><strong>{materialRemoval.impact.pages}</strong><small>个页面</small></span>
+          <span><strong>{materialRemoval.impact.source_refs}</strong><small>条来源</small></span>
+          <span><strong>{materialRemoval.impact.user_notes_protected}</strong><small>条受保护笔记</small></span>
+        </div>
+      </ConfirmDialog>}
     </div>
   )
 }

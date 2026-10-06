@@ -10,6 +10,7 @@ import type {
   Note,
   Page,
 } from '../types'
+import { ConfirmDialog } from './ConfirmDialog'
 import { CourseSwitcher } from './CourseSwitcher'
 
 export type Feature = 'notes' | 'knowledge-tree' | 'materials' | 'assistant'
@@ -110,12 +111,6 @@ export function AppLayout() {
   const blocker = useBlocker(({ currentLocation, nextLocation }) => noteDirty && currentLocation.pathname !== nextLocation.pathname)
 
   useEffect(() => {
-    if (blocker.state !== 'blocked') return
-    if (window.confirm('笔记有尚未保存的修改。离开将丢失这些内容，仍要继续吗？')) blocker.proceed()
-    else blocker.reset()
-  }, [blocker])
-
-  useEffect(() => {
     if (!noteDirty) return
     const warnBeforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
     window.addEventListener('beforeunload', warnBeforeUnload)
@@ -179,6 +174,16 @@ export function AppLayout() {
         )}
         <Outlet />
       </main>
+      {blocker.state === 'blocked' && <ConfirmDialog
+        eyebrow="未保存的笔记"
+        title="离开正在编辑的笔记？"
+        description="当前修改尚未保存。离开此页面会丢弃这份草稿，已保存的笔记正文不会改变。"
+        confirmLabel="放弃草稿并离开"
+        cancelLabel="继续编辑"
+        tone="danger"
+        onConfirm={() => blocker.proceed()}
+        onCancel={() => blocker.reset()}
+      />}
     </div>
   )
 }
