@@ -2,13 +2,27 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy import select
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    UploadFile,
+)
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.ai.deepseek import DeepSeekClient, DeepSeekError
 from app.ai.prompts import build_answer_messages
 from app.core.config import settings
+from app.core.settings_store import (
+    SettingsVerifyError,
+    SettingsWriteError,
+    apply_updates,
+    build_status,
+)
 from app.db.database import get_db
 from app.db.models import (
     Course,
@@ -28,7 +42,9 @@ from app.schemas.api import (
     AssistantResponse,
     AssistantSource,
     CourseCreate,
+    CourseDeleteResponse,
     CourseRead,
+    CourseUpdate,
     JobRead,
     KnowledgeEdgeRead,
     KnowledgeGraphRead,
@@ -38,10 +54,12 @@ from app.schemas.api import (
     NoteRevisionRead,
     NoteUpdate,
     PageRead,
+    SettingsStatus,
+    SettingsUpdate,
+    SettingsUpdateResponse,
     SourceRefRead,
     UploadMaterialResponse,
 )
-from app.workers.material_worker import process_material
 
 router = APIRouter()
 
@@ -49,6 +67,42 @@ router = APIRouter()
 @router.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "notebook-backend"}
+
+
+@router.get("/settings", response_model=SettingsStatus)
+def get_settings() -> SettingsStatus:
+    """返回脱敏后的配置状态；不包含任何密钥明文。"""
+    return SettingsStatus.model_validate(build_status())
+
+
+@router.patch("/settings", response_model=SettingsUpdateResponse)
+def update_settings(
+    payload: SettingsUpdate,
+    x_notebook_settings_token: str | None = Header(default=None),
+) -> SettingsUpdateResponse:
+    """按白名单写入本地 .env。
+
+    安全约束：
+    - 非白名单键直接 400，不做静默忽略。
+    - 密钥类键需要 `NOTEBOOK_ALLOW_SECRET_WRITE=true` + 正确的设置口令。
+    - 写入前自动备份 .env，写入后热更新运行时配置。
+    """
+    updates = payload.model_dump(exclude_none=True)
+    try:
+        outcome = apply_updates(updates, x_notebook_settings_token)
+    except SettingsVerifyError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SettingsWriteError as exc:
+        detail = str(exc)
+        if "口令" in detail or "密钥写入" in detail:
+            raise HTTPException(status_code=403, detail=detail) from exc
+        raise HTTPException(status_code=400, detail=detail) from exc
+    return SettingsUpdateResponse(
+        updated=outcome.updated,
+        backup_path=outcome.backup_path,
+        status=SettingsStatus.model_validate(build_status()),
+        warnings=outcome.warnings,
+    )
 
 
 @router.post("/courses", response_model=CourseRead, status_code=201)
@@ -63,6 +117,70 @@ def create_course(payload: CourseCreate, db: Session = Depends(get_db)) -> Cours
 @router.get("/courses", response_model=list[CourseRead])
 def list_courses(db: Session = Depends(get_db)) -> list[Course]:
     return list(db.scalars(select(Course).order_by(Course.created_at.desc())).all())
+
+
+@router.patch("/courses/{course_id}", response_model=CourseRead)
+def rename_course(course_id: str, payload: CourseUpdate, db: Session = Depends(get_db)) -> Course:
+    """重命名课程。名称做去空白与截断，不允许改成空。"""
+    course = ensure_course(db, course_id)
+    name = payload.name.strip()[:200]
+    if not name:
+        raise HTTPException(status_code=400, detail="课程名称不能为空")
+    course.name = name
+    db.commit()
+    db.refresh(course)
+    return course
+
+
+@router.delete("/courses/{course_id}", response_model=CourseDeleteResponse)
+def delete_course(course_id: str, db: Session = Depends(get_db)) -> CourseDeleteResponse:
+    """删除课程及其全部关联数据。
+
+    级联顺序由 ORM relationship 的 cascade 负责；这里显式统计删除量，
+    并在提交前收集原始课件文件名，以便一并清理磁盘文件。
+    """
+    course = ensure_course(db, course_id)
+
+    materials = list(db.scalars(select(Material).where(Material.course_id == course_id)).all())
+    stored_filenames = [material.stored_filename for material in materials]
+    pages = int(
+        db.scalar(
+            select(func.count())
+            .select_from(MaterialPage)
+            .join(Material, MaterialPage.material_id == Material.id)
+            .where(Material.course_id == course_id)
+        )
+        or 0
+    )
+    nodes = int(
+        db.scalar(
+            select(func.count())
+            .select_from(KnowledgeNode)
+            .where(KnowledgeNode.course_id == course_id)
+        )
+        or 0
+    )
+    note_count = int(
+        db.scalar(select(func.count()).select_from(Note).where(Note.course_id == course_id)) or 0
+    )
+
+    # 先删库，成功后再删文件；库删失败会回滚，不会出现"文件没了但记录还在"
+    db.delete(course)
+    db.commit()
+
+    for stored_filename in stored_filenames:
+        try:
+            (settings.originals_dir / stored_filename).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    return CourseDeleteResponse(
+        deleted_course_id=course_id,
+        deleted_materials=len(materials),
+        deleted_pages=pages,
+        deleted_knowledge_nodes=nodes,
+        deleted_notes=note_count,
+    )
 
 
 @router.get("/courses/{course_id}/materials", response_model=list[MaterialRead])
@@ -82,7 +200,6 @@ def list_materials(course_id: str, db: Session = Depends(get_db)) -> list[Materi
 )
 def upload_material(
     course_id: str,
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     lecture_title: str = Form(...),
     db: Session = Depends(get_db),
@@ -120,13 +237,14 @@ def upload_material(
         size_bytes=size_bytes,
         status="pending",
     )
-    job = ProcessingJob(material_id=material_id, kind="parse_material")
+    job = ProcessingJob(material_id=material_id, kind="parse_material", status="pending")
     db.add(material)
     db.add(job)
     db.commit()
     db.refresh(material)
     db.refresh(job)
-    background_tasks.add_task(process_material, job.id)
+    # 只入队，不在此进程内执行：常驻工作线程会在下一轮轮询时取走它。
+    # 这样即便当前请求进程随后重启，任务也不会丢（见 app/workers/job_worker.py）。
     return UploadMaterialResponse(material=material, job=job)
 
 

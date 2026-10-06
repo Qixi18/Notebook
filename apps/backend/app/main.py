@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.routes import router
 from app.core.config import settings
 from app.db.database import Base, engine
+from app.workers.job_worker import worker
 
 
 @asynccontextmanager
@@ -17,7 +18,13 @@ async def lifespan(_: FastAPI):
     settings.derived_dir.mkdir(parents=True, exist_ok=True)
     settings.backups_dir.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
-    yield
+    # 常驻工作线程接管解析任务：这样刷新/重启后端都不会再丢任务，
+    # 且启动时会把上次遗留的 processing 任务重新排队（自愈）。
+    worker.start()
+    try:
+        yield
+    finally:
+        worker.stop()
 
 
 app = FastAPI(
