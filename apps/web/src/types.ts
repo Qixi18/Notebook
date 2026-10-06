@@ -116,6 +116,7 @@ export type UploadResponse = {
 
 export type AssistantSource = {
   source_type: 'course_material' | 'web'
+  source_ref_id?: string | null
   material_id?: string | null
   lecture_title?: string | null
   page_number?: number | null
@@ -155,6 +156,24 @@ export type AssistantClaim = {
   evidence_type: string
   support_level: string
   source_indexes: number[]
+}
+
+export type TermExplanationSource = {
+  material_id: string
+  lecture_title: string
+  page_number: number
+  location_label?: string | null
+  snippet: string
+}
+
+export type TermExplanation = {
+  original: string
+  common_translations: string[]
+  discipline: string | null
+  explanation: string
+  source_note: string
+  uncertain: boolean
+  sources: TermExplanationSource[]
 }
 
 export type Note = {
@@ -221,6 +240,17 @@ export type KnowledgeEdge = {
 export type KnowledgeGraph = {
   nodes: KnowledgeNode[]
   edges: KnowledgeEdge[]
+}
+
+export type KnowledgeChange = {
+  id: string
+  proposal_id: string | null
+  node_id: string | null
+  change_type: string
+  before_json: string
+  after_json: string
+  reason: string
+  created_at: string
 }
 
 export type Conversation = {
@@ -311,13 +341,4 @@ export type BackupPreview = {
   total_bytes: number
   conflicts: string[]
   errors: string[]
-}
-
-export type TermExplanation = {
-  original: string
-  common_translations: string[]
-  discipline: string | null
-  explanation: string
-  source_note: string
-  uncertain: boolean
 }

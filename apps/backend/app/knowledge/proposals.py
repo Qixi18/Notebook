@@ -159,6 +159,13 @@ def apply_proposal(db: Session, proposal: KnowledgeProposal, *, decision: str, n
 def create_note_suggestion(
     db: Session, *, note_id: str, proposed_markdown: str, source_ids: list[str], impact: str,
 ) -> NoteSuggestion:
+    existing = db.scalar(select(NoteSuggestion).where(
+        NoteSuggestion.note_id == note_id,
+        NoteSuggestion.status == "pending",
+        NoteSuggestion.proposed_markdown == proposed_markdown,
+    ))
+    if existing is not None:
+        return existing
     suggestion = NoteSuggestion(
         note_id=note_id,
         proposed_markdown=proposed_markdown,

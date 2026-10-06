@@ -17,6 +17,7 @@ from app.db.models import (
 )
 from app.knowledge.proposals import apply_proposal
 from app.schemas.api import (
+    KnowledgeChangeRead,
     KnowledgeEdgeRead,
     KnowledgeGraphRead,
     KnowledgeNodeRead,
@@ -95,7 +96,7 @@ def review_knowledge_proposal(
     return proposal
 
 
-@router.get("/courses/{course_id}/knowledge-changes")
+@router.get("/courses/{course_id}/knowledge-changes", response_model=list[KnowledgeChangeRead])
 def list_knowledge_changes(course_id: str, db: Session = Depends(get_db)) -> list[dict]:
     ensure_course(db, course_id)
     changes = list(db.scalars(

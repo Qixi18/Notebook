@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -43,3 +45,14 @@ class KnowledgeEdgeRead(BaseModel):
 class KnowledgeGraphRead(BaseModel):
     nodes: list[KnowledgeNodeWithSourcesRead]
     edges: list[KnowledgeEdgeRead]
+
+
+class KnowledgeChangeRead(BaseModel):
+    id: str
+    proposal_id: str | None
+    node_id: str | None
+    change_type: str
+    before_json: str
+    after_json: str
+    reason: str
+    created_at: datetime

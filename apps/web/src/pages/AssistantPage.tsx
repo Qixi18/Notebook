@@ -137,7 +137,7 @@ export function AssistantPage() {
             <button className="secondary-button" type="submit" disabled={!term.trim() || termBusy}>{termBusy ? '查询中…' : '解释术语'}</button>
           </form>
           {termError && <p className="form-error" role="alert">{termError}</p>}
-          {termExplanation && <div className={`term-explanation ${termExplanation.uncertain ? 'term-explanation-uncertain' : ''}`} role="status"><strong>{termExplanation.original}{termExplanation.discipline ? ` · ${termExplanation.discipline}` : ''}</strong>{termExplanation.common_translations.length > 0 && <span>常见译法：{termExplanation.common_translations.join('、')}</span>}<p>{termExplanation.explanation}</p><small>{termExplanation.source_note}{termExplanation.uncertain ? ' · 不确定' : ''}</small></div>}
+          {termExplanation && <div className={`term-explanation ${termExplanation.uncertain ? 'term-explanation-uncertain' : ''}`} role="status"><strong>{termExplanation.original}{termExplanation.discipline ? ` · ${termExplanation.discipline}` : ''}</strong>{termExplanation.common_translations.length > 0 && <span>常见译法：{termExplanation.common_translations.join('、')}</span>}<p>{termExplanation.explanation}</p><small>{termExplanation.source_note}{termExplanation.uncertain ? ' · 不确定' : ''}</small>{termExplanation.sources?.map((source) => <small key={`${source.material_id}-${source.page_number}`}>课程来源：{source.lecture_title} · 第 {source.page_number} 页 · {source.snippet}</small>)}</div>}
         </details>
 
         <div className="assistant-conversation" aria-live="polite">

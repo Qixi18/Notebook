@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Material, MaterialPage, PageBlock, RetrievalChunk
+from app.db.models import Material, MaterialPage, PageBlock, RetrievalChunk, SourceRef
 from app.retrieval.embedding import EmbeddingClient, EmbeddingError
 
 
@@ -20,6 +20,7 @@ class RetrievedChunk:
     text: str
     score: float
     page_block_id: str | None = None
+    source_ref_id: str | None = None
     location_label: str | None = None
     score_source: str = "keyword"
     direct_support: bool = True
@@ -72,8 +73,12 @@ def retrieve(
     page_number: int | None = None,
     limit: int = 5,
 ) -> list[RetrievedChunk]:
+    source_ref_id = select(SourceRef.id).where(
+        SourceRef.page_block_id == PageBlock.id,
+        SourceRef.status == "active",
+    ).limit(1).scalar_subquery()
     query = (
-        select(RetrievalChunk, PageBlock, MaterialPage, Material)
+        select(RetrievalChunk, PageBlock, MaterialPage, Material, source_ref_id.label("source_ref_id"))
         .join(PageBlock, RetrievalChunk.page_block_id == PageBlock.id)
         .join(MaterialPage, PageBlock.page_id == MaterialPage.id)
         .join(Material, MaterialPage.material_id == Material.id)
@@ -98,7 +103,7 @@ def retrieve(
         except EmbeddingError:
             query_vector = None
     results: list[RetrievedChunk] = []
-    for chunk, block, page, material in db.execute(query).all():
+    for chunk, block, page, material, source_id in db.execute(query).all():
         text = chunk.text.strip()
         haystack = text.lower()
         lexical_score = float(sum(haystack.count(term) for term in terms))
@@ -118,6 +123,7 @@ def retrieve(
                     text=text,
                     score=score,
                     page_block_id=chunk.page_block_id,
+                    source_ref_id=source_id,
                     location_label=block.location_label or page.location_label,
                     score_source="hybrid" if vector_score else "keyword",
                     direct_support=lexical_score > 0 or vector_score >= 0.55,

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.deepseek import DeepSeekClient, DeepSeekError
+from app.ai.discipline import infer_context
 from app.ai.evidence import claim_payload, extract_claims
 from app.ai.prompts import build_answer_messages
 from app.core.config import settings
@@ -33,8 +34,10 @@ def run_answer(
     material_id: str | None = None,
     page_number: int | None = None,
     allow_web: bool = True,
+    learning_goal: str | None = None,
     history: list[tuple[str, str]] | None = None,
 ) -> dict:
+    teaching_context = infer_context(question, learning_goal)
     selected_material = db.get(Material, material_id) if material_id else None
     chunks = rerank(
         question,
@@ -106,13 +109,23 @@ def run_answer(
     client = DeepSeekClient()
     if client.configured:
         try:
-            response = client.complete_json(build_answer_messages(question, context), max_tokens=2400)
+            response = client.complete_json(
+                build_answer_messages(
+                    question,
+                    context,
+                    learning_goal=teaching_context.learning_goal,
+                    discipline=teaching_context.discipline,
+                ),
+                max_tokens=2400,
+            )
             answer = str(response.get("answer_markdown") or "").strip()
             if answer:
                 claims = extract_claims(answer, chunks, web_results)
                 return {"answer": answer, "chunks": chunks, "web_results": web_results,
                         "claims": [claim_payload(claim) for claim in claims],
                         "mode": "deepseek-rag", "web_search_status": web_status,
+                        "learning_goal": teaching_context.learning_goal,
+                        "discipline": teaching_context.discipline,
                         "model_version": settings.deepseek_model}
         except DeepSeekError:
             pass
@@ -131,6 +144,8 @@ def run_answer(
     return {"answer": answer, "chunks": chunks, "web_results": web_results,
             "claims": [claim_payload(claim) for claim in claims],
             "mode": "local-retrieval-fallback", "web_search_status": web_status,
+            "learning_goal": teaching_context.learning_goal,
+            "discipline": teaching_context.discipline,
             "model_version": "keyword-or-hybrid-fallback"}
 
 
@@ -138,6 +153,7 @@ def source_payload(chunk: RetrievedChunk) -> dict:
     return {
         "source_type": "course_material",
         "material_id": chunk.material_id,
+        "source_ref_id": chunk.source_ref_id,
         "lecture_title": chunk.lecture_title,
         "page_number": chunk.page_number,
         "location_label": chunk.location_label,

@@ -24,6 +24,7 @@ from app.schemas.coverage import CoverageLocation, CoverageRead
 from app.schemas.feedback import FeedbackCreate, FeedbackRead
 from app.schemas.jobs import JobRead
 from app.schemas.knowledge import (
+    KnowledgeChangeRead,
     KnowledgeEdgeRead,
     KnowledgeGraphRead,
     KnowledgeNodeRead,
@@ -41,7 +42,7 @@ from app.schemas.materials import (
 )
 from app.schemas.notes import NoteRead, NoteRevisionRead, NoteUpdate
 from app.schemas.proposals import KnowledgeProposalRead, NoteSuggestionRead, ProposalReview
-from app.schemas.terms import TermExplanationRequest, TermExplanationResponse
+from app.schemas.terms import TermExplanationRequest, TermExplanationResponse, TermExplanationSource
 
 __all__ = [
     'AssistantClaim',
@@ -64,6 +65,7 @@ __all__ = [
     'FeedbackCreate',
     'FeedbackRead',
     'JobRead',
+    'KnowledgeChangeRead',
     'KnowledgeEdgeRead',
     'KnowledgeGraphRead',
     'KnowledgeNodeRead',
@@ -83,6 +85,7 @@ __all__ = [
     'SourceRefRead',
     'TermExplanationRequest',
     'TermExplanationResponse',
+    'TermExplanationSource',
     'UploadMaterialResponse',
     'WebSourceRead',
 ]

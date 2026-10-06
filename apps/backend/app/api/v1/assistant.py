@@ -40,6 +40,7 @@ def ask_assistant(
         material_id=payload.material_id,
         page_number=payload.page_number,
         allow_web=payload.allow_web,
+        learning_goal=payload.learning_goal,
     )
     sources = [AssistantSource(**source_payload(chunk)) for chunk in result["chunks"]]
     sources.extend(

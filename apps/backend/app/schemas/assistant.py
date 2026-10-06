@@ -15,6 +15,7 @@ class AssistantRequest(BaseModel):
 
 class AssistantSource(BaseModel):
     source_type: str = "course_material"
+    source_ref_id: str | None = None
     material_id: str | None = None
     lecture_title: str | None = None
     page_number: int | None = None

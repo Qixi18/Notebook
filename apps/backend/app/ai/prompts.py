@@ -53,10 +53,20 @@ ANSWER_SYSTEM = r"""
 """.strip()
 
 
-def build_answer_messages(question: str, context: str) -> list[dict[str, str]]:
+def build_answer_messages(
+    question: str,
+    context: str,
+    *,
+    learning_goal: str = "理解概念",
+    discipline: str = "通用课程",
+) -> list[dict[str, str]]:
     user = f"""
 用户问题：
 {question}
+
+教学上下文：
+- 学习目标：{learning_goal}
+- 学科提示：{discipline}
 
 检索依据（明确区分课程资料和网络补充）：
 ---

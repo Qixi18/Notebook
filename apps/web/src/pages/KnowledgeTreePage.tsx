@@ -20,6 +20,7 @@ export function KnowledgeTreePage() {
   const [lectureFilter, setLectureFilter] = useState('all')
   const [zoom, setZoom] = useState(1)
   const [proposals, setProposals] = useState<KnowledgeProposal[]>([])
+  const [changes, setChanges] = useState<import('../types').KnowledgeChange[]>([])
   const [proposalError, setProposalError] = useState<string>()
   const navigate = useNavigate()
 
@@ -45,6 +46,7 @@ export function KnowledgeTreePage() {
   const selectedNode = visibleNodes.find((node) => node.id === selectedNodeId) ?? visibleNodes[0]
   const selectedNote = selectedNode && notes.find((item) => item.knowledge_node_id === selectedNode.id)
   const relatedEdges = selectedNode ? graph.edges.filter((edge) => edge.source_node_id === selectedNode.id || edge.target_node_id === selectedNode.id) : []
+  const selectedChanges = selectedNode ? changes.filter((change) => change.node_id === selectedNode.id) : []
   const coreCutoff = 2
 
   useEffect(() => {
@@ -67,6 +69,7 @@ export function KnowledgeTreePage() {
   useEffect(() => {
     if (!courseId) return
     void api.listKnowledgeProposals(courseId, 'pending').then(setProposals).catch(() => setProposalError('待确认知识整合读取失败'))
+    void api.listKnowledgeChanges(courseId).then(setChanges).catch(() => setChanges([]))
   }, [courseId, graph.nodes.length])
 
   async function reviewProposal(proposalId: string, decision: 'confirm' | 'reject') {
@@ -161,6 +164,7 @@ export function KnowledgeTreePage() {
                 {sourcesLoading ? <p className="muted-copy" role="status">正在读取来源…</p> : sources.length ? <div className="source-card-list">{sources.map((source) => <SourceCard key={source.id} title={materials.find((item) => item.id === source.material_id)?.lecture_title ?? '课程资料'} pageNumber={source.page_number} quote={source.quote} onOpen={() => openSource(source)} />)}</div> : <p className={sourcesError ? 'evidence-error' : 'muted-copy'} role={sourcesError ? 'alert' : undefined}>{sourcesError ? '课件来源暂时无法读取。' : '没有可用的课件来源记录。'}</p>}
               </div>}
               {selectedNote && <div className="node-detail-section"><strong>网络补充（与课件区分）</strong>{webSources.length ? <div className="source-card-list">{webSources.map((source) => <a className="source-card" key={source.id} href={source.url} target="_blank" rel="noreferrer"><span className="source-card-icon">↗</span><span className="source-card-body"><small className="source-card-meta">{source.site_name} · {new Date(source.retrieved_at).toLocaleDateString('zh-CN')}</small><strong>{source.title}</strong><small>{source.snippet}</small></span></a>)}</div> : <p className="muted-copy">没有保存的网络来源。</p>}</div>}
+              <div className="node-detail-section"><strong>知识变更历史</strong>{selectedChanges.length ? <div className="proposal-list">{selectedChanges.slice(0, 6).map((change) => <article className="proposal-card" key={change.id}><strong>{change.change_type}</strong><small>{new Date(change.created_at).toLocaleString('zh-CN')}</small><p>{change.reason || '已记录来源或摘要变化。'}</p></article>)}</div> : <p className="muted-copy">当前节点还没有已记录的变更。</p>}</div>
               <div className="node-detail-section"><strong>待确认整合</strong>{proposalError && <p className="evidence-error">{proposalError}</p>}{proposals.length ? proposals.slice(0, 4).map((proposal) => <article className="proposal-card" key={proposal.id}><strong>{proposal.candidate_name}</strong><small>{proposal.kind} · 置信度 {Math.round(proposal.confidence * 100)}%</small><p>{proposal.rationale}</p><div><button className="secondary-button" onClick={() => void reviewProposal(proposal.id, 'confirm')}>确认合并</button><button className="text-button" onClick={() => void reviewProposal(proposal.id, 'reject')}>拒绝</button></div></article>) : <p className="muted-copy">当前没有需要人工确认的跨讲整合。</p>}</div>
             </> : <p className="muted-copy">从列表中选择一个知识点，查看详细信息。</p>}
           </aside>

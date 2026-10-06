@@ -19,7 +19,7 @@ from app.db.models import (
     SourceRef,
 )
 from app.knowledge.matcher import find_candidates, normalize_name
-from app.knowledge.proposals import create_knowledge_proposal
+from app.knowledge.proposals import create_knowledge_proposal, create_note_suggestion
 from app.knowledge.relations import add_relation
 from app.notes.renderer import render_note_markdown
 
@@ -195,19 +195,16 @@ def ensure_note(
                 user_locked=False,
             )
         )
-    elif not note.user_locked and note.content_markdown != content:
-        _, separator, previous_web_references = note.content_markdown.partition("\n\n## 网络拓展阅读（外部来源）\n")
-        note.content_markdown = content + (separator + "## 网络拓展阅读（外部来源）\n" + previous_web_references if separator else "")
-        note.content_origin = "ai_web_augmented" if separator else "ai"
-        note.revision_number += 1
-        db.add(
-            NoteRevision(
-                note_id=note.id,
-                revision_number=note.revision_number,
-                content_markdown=content,
-                content_origin="ai",
-                user_locked=False,
-            )
+    elif note.content_markdown != content:
+        create_note_suggestion(
+            db,
+            note_id=note.id,
+            proposed_markdown=content,
+            source_ids=[source.id for source in source_refs],
+            impact=(
+                "重新解析生成了新的 AI 笔记草稿；当前正文保持不变，"
+                "请先比较来源和差异，再决定是否接受。"
+            ),
         )
     add_unique_sources(note.source_refs, source_refs)
     existing = {

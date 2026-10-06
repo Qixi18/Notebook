@@ -9,6 +9,14 @@ class TermExplanationRequest(BaseModel):
     context: str | None = Field(default=None, max_length=1000)
 
 
+class TermExplanationSource(BaseModel):
+    material_id: str
+    lecture_title: str
+    page_number: int
+    location_label: str | None = None
+    snippet: str
+
+
 class TermExplanationResponse(BaseModel):
     original: str
     common_translations: list[str]
@@ -16,3 +24,4 @@ class TermExplanationResponse(BaseModel):
     explanation: str
     source_note: str
     uncertain: bool
+    sources: list[TermExplanationSource] = Field(default_factory=list)

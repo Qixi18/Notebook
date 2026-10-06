@@ -11,13 +11,13 @@ from app.db.database import SessionLocal
 from app.db.models import (
     KnowledgeNode,
     MaterialPage,
-    NoteRevision,
     PageBlock,
     ProcessingJob,
     SourceRef,
     WebSource,
 )
 from app.knowledge.extractor import extract_material_knowledge
+from app.knowledge.proposals import create_note_suggestion
 from app.parsers.document import parse_document
 from app.parsers.ocr import ocr_pdf_page
 from app.retrieval.service import index_material
@@ -156,7 +156,7 @@ def process_material(job_id: str) -> None:
                         db.flush()
                         node_sources.append(source)
                         found += 1
-                    if node_sources and node.note is not None and not node.note.user_locked:
+                    if node_sources and node.note is not None:
                         append_web_references(db, node.note, node_sources)
                 job.web_search_status = "completed" if found else "no_results"
                 db.commit()
@@ -274,13 +274,14 @@ def append_web_references(db, note, sources: list[WebSource]) -> None:
         snippet = source.snippet[:400].replace("\n", " ")
         references.append(f"- [{safe_title}]({source.url}) · {source.site_name} · 检索于 {source.retrieved_at:%Y-%m-%d}\n  > {snippet}")
     section = "\n\n## 网络拓展阅读（外部来源）\n" + "\n\n".join(references)
-    note.content_markdown = note.content_markdown.rstrip() + section
-    note.content_origin = "ai_web_augmented"
-    note.revision_number += 1
-    db.add(NoteRevision(
+    proposed_markdown = note.content_markdown.rstrip() + section
+    create_note_suggestion(
+        db,
         note_id=note.id,
-        revision_number=note.revision_number,
-        content_markdown=note.content_markdown,
-        content_origin="ai_web_augmented",
-        user_locked=False,
-    ))
+        proposed_markdown=proposed_markdown,
+        source_ids=[],
+        impact=(
+            f"联网检索为“{note.title}”找到 {len(additions)} 条补充来源；"
+            "正文保持不变，请核对来源后决定是否接受。"
+        ),
+    )

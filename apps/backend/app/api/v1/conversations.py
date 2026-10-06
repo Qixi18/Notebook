@@ -152,6 +152,7 @@ def send_message(
             material_id=payload.material_id,
             page_number=payload.page_number,
             allow_web=payload.allow_web,
+            learning_goal=payload.learning_goal,
             history=history,
         )
         assistant = ConversationMessage(
@@ -166,14 +167,17 @@ def send_message(
             "web_indexes": list(range(len(result["web_results"]))),
         }]
         for claim in claims:
+            linked_source = False
             for chunk_index in claim.get("chunk_indexes", []):
                 if not isinstance(chunk_index, int) or not 0 <= chunk_index < len(result["chunks"]):
                     continue
                 chunk = result["chunks"][chunk_index]
-                source_ref = db.scalar(select(SourceRef).where(
-                    SourceRef.page_block_id == chunk.page_block_id,
-                    SourceRef.status == "active",
-                )) if chunk.page_block_id else None
+                source_ref = db.get(SourceRef, chunk.source_ref_id) if chunk.source_ref_id else None
+                if source_ref is None and chunk.page_block_id:
+                    source_ref = db.scalar(select(SourceRef).where(
+                        SourceRef.page_block_id == chunk.page_block_id,
+                        SourceRef.status == "active",
+                    ))
                 db.add(MessageEvidence(
                     message_id=assistant.id,
                     source_ref_id=source_ref.id if source_ref else None,
@@ -183,6 +187,7 @@ def send_message(
                     )),
                     support_level="direct" if chunk.direct_support else "related",
                 ))
+                linked_source = True
             for web_index in claim.get("web_indexes", []):
                 if not isinstance(web_index, int) or not 0 <= web_index < len(result["web_results"]):
                     continue
@@ -194,6 +199,14 @@ def send_message(
                         claim_key=str(claim.get("claim_key") or "answer"),
                         evidence_type="web_supplement", support_level="supplement",
                     ))
+                    linked_source = True
+            if not linked_source:
+                db.add(MessageEvidence(
+                    message_id=assistant.id,
+                    claim_key=str(claim.get("claim_key") or "answer"),
+                    evidence_type=str(claim.get("evidence_type") or "general_explanation"),
+                    support_level=str(claim.get("support_level") or "unverified"),
+                ))
         conversation.updated_at = datetime.now(UTC)
         db.commit()
         db.refresh(assistant)
