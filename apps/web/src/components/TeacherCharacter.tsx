@@ -1,10 +1,20 @@
+import { useId } from 'react'
+
 export type TeacherStatus = 'idle' | 'thinking' | 'explaining' | 'error'
+export type TeacherCharacterId = 'elf' | 'doubao' | 'feiyu'
 
 const statusLabels: Record<TeacherStatus, string> = {
   idle: 'AI 教师',
   thinking: '正在思考…',
   explaining: '正在讲解',
   error: '暂时遇到问题',
+}
+
+/* 每个人物的待机名牌文案(思考/讲解/报错等状态共用状态文案) */
+const characterLabels: Record<TeacherCharacterId, string> = {
+  elf: 'AI 教师',
+  doubao: '豆包助手',
+  feiyu: '肥鱼',
 }
 
 const statusAssets: Record<TeacherStatus, string> = {
@@ -14,12 +24,106 @@ const statusAssets: Record<TeacherStatus, string> = {
   error: '/assets/teacher/teacher-error.png',
 }
 
-export function TeacherCharacter({ status = 'idle', compact = false }: { status?: TeacherStatus; compact?: boolean }) {
+/* 特效坐标全部使用立绘源图像素(1024×1536),与 SVG viewBox 一一对应,
+   因此舞台层无论以哪种断点尺寸显示,特效都能对准立绘的同一位置 */
+const sparkleSeeds = [
+  { x: 150, y: 300, r: 15, delay: 0 },
+  { x: 305, y: 168, r: 10, delay: -1.1 },
+  { x: 92, y: 565, r: 12, delay: -2.2 },
+  { x: 872, y: 150, r: 13, delay: -0.6 },
+  { x: 962, y: 360, r: 9, delay: -1.7 },
+  { x: 772, y: 92, r: 8, delay: -2.6 },
+  { x: 128, y: 1205, r: 11, delay: -0.9 },
+  { x: 938, y: 1075, r: 9, delay: -2.0 },
+]
+
+const bubbleSeeds = [
+  { x: 700, y: 195, r: 30, delay: 0 },
+  { x: 792, y: 150, r: 38, delay: -1.15 },
+  { x: 852, y: 215, r: 24, delay: -2.3 },
+]
+
+/* 四角星光:两条过中心的二次贝塞尔构成凹边菱形 */
+function sparklePath(cx: number, cy: number, r: number) {
+  return [
+    `M ${cx} ${cy - r}`,
+    `Q ${cx} ${cy} ${cx + r} ${cy}`,
+    `Q ${cx} ${cy} ${cx} ${cy + r}`,
+    `Q ${cx} ${cy} ${cx - r} ${cy}`,
+    `Q ${cx} ${cy} ${cx} ${cy - r} Z`,
+  ].join(' ')
+}
+
+export function TeacherCharacter({ status = 'idle', compact = false, animated = false, character = 'elf' }: {
+  status?: TeacherStatus
+  compact?: boolean
+  animated?: boolean
+  character?: TeacherCharacterId
+}) {
+  const rawId = useId()
+  const gradientId = `tfx-glow-${rawId.replace(/[^a-zA-Z0-9]/g, '')}`
+  const useSprite = animated && status === 'idle'
+  const idleLabel = characterLabels[character]
+
   return (
-    <div className={`teacher-character teacher-character-${status}${compact ? ' teacher-character-compact' : ''}`} role="img" aria-label={`NoteBuddy AI 精灵教师：${statusLabels[status]}`}>
+    <div className={`teacher-character teacher-character-${status}${compact ? ' teacher-character-compact' : ''}`} role="img" aria-label={`NoteBuddy AI 教师：${status === 'idle' ? idleLabel : statusLabels[status]}`}>
       <div className="teacher-character-halo" aria-hidden="true" />
-      <img className="teacher-character-image" src={statusAssets[status]} alt="" loading="lazy" decoding="async" />
-      <span className="teacher-character-label" aria-live="polite">{statusLabels[status]}</span>
+      <div className="teacher-character-stage" aria-hidden="true">
+        {useSprite ? (
+          <div className={`teacher-character-sprite teacher-character-sprite-${character}`} />
+        ) : (
+          <img className="teacher-character-image" src={statusAssets[status]} alt="" loading="lazy" decoding="async" />
+        )}
+        <svg className="teacher-character-fx" viewBox="0 0 1024 1536" preserveAspectRatio="xMidYMax meet" focusable="false">
+          {status !== 'error' && !useSprite &&
+            sparkleSeeds.map((seed, index) => (
+              <path
+                key={index}
+                className="tfx-sparkle"
+                d={sparklePath(seed.x, seed.y, seed.r)}
+                fill="#d7ecfb"
+                style={{ animationDelay: `${seed.delay}s` }}
+              />
+            ))}
+          {status === 'thinking' &&
+            bubbleSeeds.map((seed, index) => (
+              <g key={index} className="tfx-bubble" style={{ animationDelay: `${seed.delay}s` }}>
+                <circle cx={seed.x} cy={seed.y} r={seed.r} fill="rgba(255,255,255,.93)" stroke="#bcd9ef" strokeWidth={3} />
+                <text className="tfx-bubble-mark" x={seed.x} y={seed.y + seed.r * 0.42} textAnchor="middle" fontSize={seed.r * 1.25}>
+                  ?
+                </text>
+              </g>
+            ))}
+          {status === 'explaining' && (
+            <g className="tfx-orb">
+              <defs>
+                <radialGradient id={gradientId}>
+                  <stop offset="0%" stopColor="rgba(255,255,255,.95)" />
+                  <stop offset="45%" stopColor="rgba(193,223,248,.55)" />
+                  <stop offset="100%" stopColor="rgba(193,223,248,0)" />
+                </radialGradient>
+              </defs>
+              <circle className="tfx-orb-halo" cx={795} cy={195} r={110} fill={`url(#${gradientId})`} />
+              <circle className="tfx-orb-ring" cx={795} cy={195} r={72} />
+              <circle className="tfx-orb-ring tfx-orb-ring-slow" cx={795} cy={195} r={112} />
+              <g className="tfx-orbit">
+                <circle cx={795} cy={83} r={10} fill="#ffffff" opacity={0.95} />
+                <circle cx={903} cy={251} r={7} fill="#dceefb" />
+                <circle cx={687} cy={251} r={8} fill="#eaf5fd" />
+              </g>
+            </g>
+          )}
+          {status === 'error' && (
+            <g className="tfx-warn">
+              <circle cx={700} cy={185} r={38} fill="#fff4ef" stroke="#e2a58c" strokeWidth={3.5} />
+              <text className="tfx-warn-mark" x={700} y={203} textAnchor="middle">
+                !
+              </text>
+            </g>
+          )}
+        </svg>
+      </div>
+      <span className="teacher-character-label" aria-live="polite">{status === 'idle' ? idleLabel : statusLabels[status]}</span>
     </div>
   )
 }

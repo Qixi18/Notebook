@@ -7,7 +7,7 @@ import {
   type Feature,
   useWorkspace,
 } from '../components/AppLayout'
-import { TeacherCharacter } from '../components/TeacherCharacter'
+import { TeacherCharacter, type TeacherCharacterId } from '../components/TeacherCharacter'
 import { api } from '../api'
 import type { Course, Material, Note } from '../types'
 
@@ -22,6 +22,10 @@ export function HomePage() {
   const [recentNotes, setRecentNotes] = useState<Array<{ note: Note; course: Course }>>([])
   const [questionCourseId, setQuestionCourseId] = useState('')
   const [showCreateCourseDialog, setShowCreateCourseDialog] = useState(false)
+  const [teacherCharacter, setTeacherCharacter] = useState<TeacherCharacterId>(() => {
+    const saved = localStorage.getItem('nb-teacher-character')
+    return saved === 'doubao' || saved === 'feiyu' ? saved : 'elf'
+  })
   const location = useLocation()
   const navigate = useNavigate()
   const isModalOpen = showCreateCourseDialog
@@ -110,6 +114,14 @@ export function HomePage() {
     const initialQuestion = question.trim()
     setQuestion(initialQuestion)
     navigate(featurePath(questionCourse.id, 'assistant'), { state: { initialQuestion } })
+  }
+
+  function toggleTeacherCharacter() {
+    setTeacherCharacter((current) => {
+      const next = current === 'elf' ? 'doubao' : current === 'doubao' ? 'feiyu' : 'elf'
+      localStorage.setItem('nb-teacher-character', next)
+      return next
+    })
   }
 
   function openCourseMaterials() {
@@ -203,7 +215,12 @@ export function HomePage() {
       </div>
 
       <aside className="home-teacher-column" aria-label="AI 教师">
-        <div className="home-teacher-frame"><TeacherCharacter /></div>
+        <div className="home-teacher-frame">
+          <button className="home-teacher-switch" type="button" onClick={toggleTeacherCharacter} title="切换教师形象" aria-label="切换教师形象">
+            ⇄
+          </button>
+          <TeacherCharacter animated character={teacherCharacter} />
+        </div>
       </aside>
 
       {requestedFeature && (

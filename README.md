@@ -182,3 +182,13 @@ EMBEDDING_MODEL=
 - 详细功能清单与优先级排期
 - 3人分工方案
 - 8-10周开发里程碑
+
+## 七、AI 教师待机动画(连续帧雪碧图)
+
+首页 AI 教师支持三个形象切换(精灵教师 / 豆包助手 / 肥鱼),待机动画由连续帧合成的雪碧图驱动。**克隆仓库即可直接使用**,无需额外素材:
+
+- 雪碧图(构建产物,已提交):`apps/web/public/assets/teacher/*.webp`
+- 切换入口:首页人物框右上角 `⇄` 按钮,选择存 localStorage
+- 源帧放在本机 `data/frames/<人物>/`(约 90MB,不提交 Git,源文件走网盘共享),仓库附带构建脚本可随时重新生成
+- 重建:`python scripts/build_teacher_sheets.py`(可只重建单个,如 `python scripts/build_teacher_sheets.py doubao-idle`)
+- 新增人物:① `data/frames/<名字>/` 放入帧序列 ② 脚本 `CHARACTERS` 表加一行(网格/单帧尺寸/输出名)③ `TeacherCharacter.tsx` 的 `TeacherCharacterId` 与 `characterLabels` 各加一项 ④ 网格或帧数变化时同步 `styles.css` 的 keyframes 与 `background-size`
