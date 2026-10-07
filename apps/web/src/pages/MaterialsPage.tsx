@@ -121,19 +121,24 @@ export function MaterialsPage() {
       </header>
 
       <form className="material-upload-card" onSubmit={(event) => void handleUpload(event)}>
-        <div className="upload-card-heading"><span className="upload-card-icon">＋</span><div><h2>上传一份课程资料</h2><p>支持 {(capabilities?.allowed_extensions ?? ['.pptx', '.pdf', '.docx']).join('、')}，单文件上限 {capabilities ? `${Math.round(capabilities.max_upload_bytes / 1024 / 1024)} MB` : '由后端配置'}，最多 {capabilities?.max_pages ?? 500} 个位置。</p><small>{capabilities?.ocr.status === 'ready' ? `OCR 已启用，单次最多 ${capabilities.ocr.max_pages} 页` : 'OCR 未启用；扫描页会保留为待检查位置，不生成伪文本。'}</small></div></div>
+        <div className="upload-card-heading"><span className="upload-card-icon">＋</span><div><h2>添加课程资料</h2><p>支持 {(capabilities?.allowed_extensions ?? ['.pptx', '.pdf', '.docx']).join('、')}，单文件上限 {capabilities ? `${Math.round(capabilities.max_upload_bytes / 1024 / 1024)} MB` : '由后端配置'}。</p><small>{capabilities?.ocr.status === 'ready' ? `扫描页可使用 OCR，每次最多 ${capabilities.ocr.max_pages} 页。` : '扫描页会标记为待检查，不会生成虚构文本。'}</small></div></div>
         <div className="material-upload-fields">
-          <label>章节 / 主题（可选）<input value={topicTitle} onChange={(event) => setTopicTitle(event.target.value)} maxLength={200} placeholder="例如：第一章 · 软件生命周期" /></label>
-          <label>讲次名称<input value={lectureTitle} onChange={(event) => setLectureTitle(event.target.value)} maxLength={200} placeholder="例如：第 1 讲 · 软件生命周期" /></label>
-          <label className="material-file-field">选择课件<input type="file" accept={(capabilities?.allowed_extensions ?? ['.pptx', '.pdf', '.docx']).join(',')} onChange={(event) => setFile(event.target.files?.[0])} /></label>
-          <label><input type="checkbox" checked={allowDuplicate} onChange={(event) => setAllowDuplicate(event.target.checked)} />相同文件作为新讲次导入</label>
+          <label className="material-file-field"><span>{file ? file.name : '选择课件文件'}</span><input type="file" accept={(capabilities?.allowed_extensions ?? ['.pptx', '.pdf', '.docx']).join(',')} onChange={(event) => setFile(event.target.files?.[0])} /></label>
           <button className="primary-button" type="submit" disabled={!file || busy}>{busy ? '上传中…' : '上传并解析'}</button>
         </div>
+        <details className="material-upload-options">
+          <summary>设置讲次信息</summary>
+          <div className="material-upload-metadata">
+            <label>讲次名称<input value={lectureTitle} onChange={(event) => setLectureTitle(event.target.value)} maxLength={200} placeholder="例如：第 1 讲 · 软件生命周期" /></label>
+            <label>章节 / 主题（可选）<input value={topicTitle} onChange={(event) => setTopicTitle(event.target.value)} maxLength={200} placeholder="例如：第一章 · 软件生命周期" /></label>
+            <label className="material-duplicate-option"><input type="checkbox" checked={allowDuplicate} onChange={(event) => setAllowDuplicate(event.target.checked)} />相同文件作为新讲次导入</label>
+          </div>
+        </details>
       </form>
 
       <ProcessingStatus job={job?.material_id === selectedMaterialId ? job : undefined} material={materials.find((item) => item.id === selectedMaterialId)} />
       {materialActionError && <p className="form-error" role="alert">{materialActionError}</p>}
-      {deletedMaterials.length > 0 && <section aria-label="可恢复资料"><h2>可恢复的资料</h2>{deletedMaterials.map((material) => <div key={material.id}><span>{material.lecture_title} · {material.original_filename}</span><button className="text-button" onClick={() => void restoreMaterial(material.id)}>恢复资料</button></div>)}</section>}
+      {deletedMaterials.length > 0 && <details className="deleted-materials-disclosure"><summary>可恢复的资料 · {deletedMaterials.length}</summary>{deletedMaterials.map((material) => <div key={material.id}><span>{material.lecture_title} · {material.original_filename}</span><button className="text-button" onClick={() => void restoreMaterial(material.id)}>恢复资料</button></div>)}</details>}
 
       <section className="materials-list-section">
         <div className="section-heading-row"><div><span className="eyebrow">当前课程</span><h2>已上传资料</h2></div></div>
@@ -149,9 +154,7 @@ export function MaterialsPage() {
                     <span className="material-list-copy"><strong>{material.lecture_title}</strong><small>{material.topic_title ? `${material.topic_title} · ` : ''}{material.original_filename} · {material.page_count} 页</small><time dateTime={material.created_at}>上传于 {new Date(material.created_at).toLocaleString('zh-CN')}</time></span>
                     <span className={`status-pill status-pill-${material.status}`}>{statusLabels[material.status] ?? material.status}</span>
                   </button>
-                  {material.status === 'failed' && <button className="material-retry-action" onClick={() => void retryMaterial(material.id)}>重试解析</button>}
-                  {material.status === 'completed' && <button className="material-retry-action" onClick={() => void reparseMaterial(material.id)}>重新解析</button>}
-                  {(material.status === 'completed' || material.status === 'failed') && <button className="text-button" disabled={Boolean(deletionPreviewingId || deletingMaterialId)} onClick={() => void deleteMaterial(material.id)}>{deletionPreviewingId === material.id ? '准备移除…' : '移除资料'}</button>}
+                  {(material.status === 'failed' || material.status === 'completed') && <details className="material-row-actions"><summary>更多</summary>{material.status === 'failed' && <button className="material-retry-action" onClick={() => void retryMaterial(material.id)}>重试解析</button>}{material.status === 'completed' && <button className="material-retry-action" onClick={() => void reparseMaterial(material.id)}>重新解析</button>}<button className="text-button" disabled={Boolean(deletionPreviewingId || deletingMaterialId)} onClick={() => void deleteMaterial(material.id)}>{deletionPreviewingId === material.id ? '准备移除…' : '移除资料'}</button></details>}
                 </div>
               ))}
             </div>
@@ -173,8 +176,8 @@ export function MaterialsPage() {
                 </div>
               )}
               {selectedPage && <article className="material-page-detail"><span className="eyebrow">{selectedPage.location_label || `第 ${selectedPage.page_number} 页`} · {selectedPage.extraction_method}</span><h3>{selectedPage.title || '未识别标题'}</h3><p>{selectedPage.raw_text || '本位置没有可展示的文本。'}</p>{selectedPage.warning && <small className="form-error">{selectedPage.warning}</small>}{selectedPage.parse_status === 'ocr_candidate' && <button className="secondary-button" type="button" onClick={() => void requestOCR(selectedMaterialId!)}>请求 OCR</button>}{pageEvidence?.blocks.length ? <div className="page-block-list" aria-label="页面结构化块">{pageEvidence.blocks.map((block) => <div className="page-block-item" key={block.id}><strong>{block.block_type} · {block.location_label || `块 ${block.position + 1}`} · {block.extraction_method}</strong><small>{block.content || block.warning || '该对象没有可展示文本。'}</small>{block.note_titles.length > 0 && <small>关联笔记：{block.note_titles.join('、')}</small>}</div>)}</div> : null}{pageEvidence?.note_titles.length ? <small className="evidence-empty">本位置关联笔记：{pageEvidence.note_titles.join('、')}</small> : null}</article>}
-              <CoverageGrid coverage={coverage} onOpenPage={setSelectedPageNumber} />
-              {selectedMaterialId && <section className="material-web-sources"><div className="panel-heading"><strong>联网补充来源</strong><span>{webSources.length}</span></div>{webSources.length ? <div className="source-card-list">{webSources.map((source) => <a className="source-card" key={source.id} href={source.url} target="_blank" rel="noreferrer"><span className="source-card-icon">↗</span><span className="source-card-body"><small className="source-card-meta">{source.site_name} · 检索于 {new Date(source.retrieved_at).toLocaleDateString('zh-CN')}</small><strong>{source.title}</strong><small>{source.snippet}</small></span></a>)}</div> : <p className="evidence-empty">此资料没有已保存的联网补充来源。搜索未配置或未找到可靠结果时不会显示虚构来源。</p>}</section>}
+              {coverage && <details className="material-coverage-disclosure"><summary>查看来源覆盖</summary><CoverageGrid coverage={coverage} onOpenPage={setSelectedPageNumber} /></details>}
+              {selectedMaterialId && <details className="material-web-sources"><summary>联网补充来源 · {webSources.length}</summary>{webSources.length ? <div className="source-card-list">{webSources.map((source) => <a className="source-card" key={source.id} href={source.url} target="_blank" rel="noreferrer"><span className="source-card-icon">↗</span><span className="source-card-body"><small className="source-card-meta">{source.site_name} · 检索于 {new Date(source.retrieved_at).toLocaleDateString('zh-CN')}</small><strong>{source.title}</strong><small>{source.snippet}</small></span></a>)}</div> : <p className="evidence-empty">此资料没有已保存的联网补充来源。搜索未配置或未找到可靠结果时不会显示虚构来源。</p>}</details>}
             </div>
           </div>
         )}

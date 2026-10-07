@@ -1,43 +1,30 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 import { CourseGate } from '../components/CourseGate'
-import { BackupPanel } from '../components/BackupPanel'
-import { DiagnosticsPanel } from '../components/DiagnosticsPanel'
 import {
-  featureDescriptions,
-  featureLabels,
+  featurePath,
   type Feature,
   useWorkspace,
 } from '../components/AppLayout'
 import { TeacherCharacter } from '../components/TeacherCharacter'
-import { api, type ProviderStatus } from '../api'
-import type { Course, DeletionPreview, Material } from '../types'
-
-const features: Feature[] = ['notes', 'knowledge-tree', 'materials', 'assistant']
+import { api } from '../api'
+import type { Course, Material, Note } from '../types'
 
 export function HomePage() {
-  const { courses, coursesLoading, createCourse, refreshCourses, busy } = useWorkspace()
+  const { courses, coursesLoading, createCourse, busy, question, setQuestion } = useWorkspace()
   const [requestedFeature, setRequestedFeature] = useState<Feature>()
   const [newCourseName, setNewCourseName] = useState('')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string>()
   const [attentionMaterials, setAttentionMaterials] = useState<Material[]>([])
   const [materialCounts, setMaterialCounts] = useState<Record<string, number>>({})
-  const [deletedCourses, setDeletedCourses] = useState<Course[]>([])
-  const [courseActionError, setCourseActionError] = useState<string>()
-  const [providerStates, setProviderStates] = useState<Record<string, ProviderStatus>>({})
-  const [checkingProvider, setCheckingProvider] = useState<string>()
-  const [ocrStatus, setOcrStatus] = useState<{ status: string; available: boolean }>()
-  const [backupBusy, setBackupBusy] = useState<string>()
-  const [backupMessage, setBackupMessage] = useState<string>()
-  const [courseRemoval, setCourseRemoval] = useState<{ course: Course; impact: DeletionPreview }>()
-  const [removingCourse, setRemovingCourse] = useState(false)
+  const [recentNotes, setRecentNotes] = useState<Array<{ note: Note; course: Course }>>([])
+  const [questionCourseId, setQuestionCourseId] = useState('')
   const [showCreateCourseDialog, setShowCreateCourseDialog] = useState(false)
-  const courseListRef = useRef<HTMLElement>(null)
   const location = useLocation()
   const navigate = useNavigate()
-  const isModalOpen = showCreateCourseDialog || Boolean(courseRemoval)
+  const isModalOpen = showCreateCourseDialog
 
   useEffect(() => {
     if (!isModalOpen) return
@@ -51,71 +38,10 @@ export function HomePage() {
     function handleModalKeyDown(event: KeyboardEvent) {
       if (event.key !== 'Escape') return
       if (showCreateCourseDialog && !creating) setShowCreateCourseDialog(false)
-      if (courseRemoval && !removingCourse) setCourseRemoval(undefined)
     }
     window.addEventListener('keydown', handleModalKeyDown)
     return () => window.removeEventListener('keydown', handleModalKeyDown)
-  }, [isModalOpen, showCreateCourseDialog, creating, courseRemoval, removingCourse])
-
-  useEffect(() => {
-    void api.getConfigStatus().then(setProviderStates).catch(() => setProviderStates({}))
-    void api.getOCRStatus().then(setOcrStatus).catch(() => setOcrStatus(undefined))
-  }, [])
-
-  async function testProvider(provider: 'deepseek' | 'embedding' | 'tavily') {
-    try {
-      setCheckingProvider(provider)
-      const status = await api.checkProvider(provider)
-      setProviderStates((current) => ({ ...current, [provider]: status }))
-    } catch (cause) { setCourseActionError(cause instanceof Error ? cause.message : '连接检查失败') }
-    finally { setCheckingProvider(undefined) }
-  }
-
-  useEffect(() => {
-    let active = true
-    void api.listDeletedCourses().then((items) => { if (active) setDeletedCourses(items) }).catch(() => { if (active) setDeletedCourses([]) })
-    return () => { active = false }
-  }, [courses])
-
-  async function requestCourseRemoval(course: Course) {
-    try {
-      const impact = await api.previewCourseDeletion(course.id)
-      if (impact.active_jobs) throw new Error('课程仍有处理任务，请完成后再删除。')
-      setCourseRemoval({ course, impact })
-      setCourseActionError(undefined)
-    } catch (cause) { setCourseActionError(cause instanceof Error ? cause.message : '课程移除预览失败') }
-  }
-
-  async function confirmCourseRemoval() {
-    if (!courseRemoval || removingCourse) return
-    try {
-      setRemovingCourse(true)
-      await api.deleteCourse(courseRemoval.course.id)
-      setCourseRemoval(undefined)
-      await refreshCourses()
-      setCourseActionError(undefined)
-    } catch (cause) { setCourseActionError(cause instanceof Error ? cause.message : '课程移除失败') }
-    finally { setRemovingCourse(false) }
-  }
-
-  async function restoreCourse(id: string) {
-    try { await api.restoreCourse(id); await refreshCourses(); setCourseActionError(undefined) }
-    catch (cause) { setCourseActionError(cause instanceof Error ? cause.message : '课程恢复失败') }
-  }
-
-  async function exportCourseBackup(course: Course) {
-    try {
-      setBackupBusy(course.id)
-      setBackupMessage(undefined)
-      const record = await api.exportBackup(course.id)
-      setBackupMessage(record.status === 'completed' ? `“${course.name}”的备份已生成：${record.path}` : record.error_message ?? '备份失败')
-    } catch (cause) { setBackupMessage(cause instanceof Error ? cause.message : '备份失败') }
-    finally { setBackupBusy(undefined) }
-  }
-
-  function showCourses() {
-    courseListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
+  }, [isModalOpen, showCreateCourseDialog, creating])
 
   function openCreateCourse() {
     setNewCourseName('')
@@ -136,9 +62,26 @@ export function HomePage() {
   }, [courses])
 
   useEffect(() => {
-    const state = location.state as { pendingFeature?: Feature } | null
+    let active = true
+    if (!courses.length) { setRecentNotes([]); return () => { active = false } }
+    void Promise.all(courses.map(async (course) => (await api.listNotes(course.id)).map((note) => ({ note, course }))))
+      .then((collections) => {
+        if (!active) return
+        setRecentNotes(collections.flat().sort((left, right) => right.note.updated_at.localeCompare(left.note.updated_at)).slice(0, 3))
+      })
+      .catch(() => { if (active) setRecentNotes([]) })
+    return () => { active = false }
+  }, [courses])
+
+  useEffect(() => {
+    const state = location.state as { pendingFeature?: Feature; openCreateCourse?: boolean } | null
     if (state?.pendingFeature) {
       setRequestedFeature(state.pendingFeature)
+      navigate('/', { replace: true, state: null })
+      return
+    }
+    if (state?.openCreateCourse) {
+      openCreateCourse()
       navigate('/', { replace: true, state: null })
     }
   }, [location.state, navigate])
@@ -159,104 +102,109 @@ export function HomePage() {
     }
   }
 
+  const questionCourse = courses.find((course) => course.id === questionCourseId) ?? getMostRecentlyVisitedCourse(courses)
+
+  function handleQuestionSubmit(event: FormEvent) {
+    event.preventDefault()
+    if (!questionCourse || !question.trim()) return
+    const initialQuestion = question.trim()
+    setQuestion(initialQuestion)
+    navigate(featurePath(questionCourse.id, 'assistant'), { state: { initialQuestion } })
+  }
+
+  function openCourseMaterials() {
+    if (!questionCourse) {
+      setRequestedFeature('materials')
+      return
+    }
+    navigate(featurePath(questionCourse.id, 'materials'))
+  }
+
   return (
-    <div className="home-page page-enter">
-      <header className="home-topbar">
-        <div>
-          <h1>我的学习空间</h1>
-          <p>从课程出发，把资料、笔记和知识慢慢整理起来。</p>
-        </div>
-      </header>
+    <div className="home-page home-screen-v2 page-enter">
+      <div className="home-center-column">
+        <header className="home-welcome" aria-labelledby="welcome-title">
+          <h1 id="welcome-title">你好，今天想学点什么？</h1>
+          <span className="home-welcome-spark" aria-hidden="true">✦</span>
+        </header>
 
-      <section className="home-hero" aria-labelledby="welcome-title">
-        <div className="home-hero-copy">
-          <h2 id="welcome-title">你好，今天想从哪门课开始？</h2>
-          <p>每门课程都有自己的资料、笔记和知识树。选一门继续，或创建一个新的学习空间。</p>
-          <div className="home-hero-actions">
-            <button className="primary-button" type="button" onClick={openCreateCourse}>＋ 新建课程</button>
-            <button className="secondary-button" type="button" onClick={showCourses}>浏览已有课程</button>
-          </div>
-        </div>
-        <TeacherCharacter />
-      </section>
-
-      <details className="home-secondary-panel">
-        <summary><span><strong>连接、诊断与备份</strong><small>可选服务状态 · 本机运行情况 · 课程数据保护</small></span><span className="home-secondary-chevron" aria-hidden="true">⌄</span></summary>
-      <section className="courses-section home-secondary-services" aria-label="外部服务状态">
-        <div className="section-heading-row"><div><span className="eyebrow">本地配置</span><h2>可选服务状态</h2></div></div>
-        {(['deepseek', 'embedding', 'tavily'] as const).map((provider) => <div key={provider}>
-          <span>{provider}：{providerStates[provider]?.status === 'connected' ? '连接成功' : providerStates[provider]?.status === 'configured_untested' ? '已配置，尚未测试' : providerStates[provider]?.status === 'authentication_failed' ? '认证失败' : providerStates[provider]?.status === 'rate_limited' ? '调用受限' : providerStates[provider]?.status === 'timeout' ? '连接超时' : providerStates[provider]?.status === 'unavailable' ? '暂不可用' : '未配置'}</span>
-          {providerStates[provider]?.configured && <button className="text-button" disabled={Boolean(checkingProvider)} onClick={() => void testProvider(provider)}>{checkingProvider === provider ? '检查中…' : '主动测试连接'}</button>}
-        </div>)}
-        <p>连接测试会向对应服务发送一个最小请求，可能产生少量调用费用。密钥仅保存在本机后端配置中。</p>
-        <p>OCR：{ocrStatus?.status === 'ready' ? '已启用并可用' : ocrStatus?.status === 'missing_dependency' ? '已配置但缺少本机依赖' : '未启用'}。扫描页会保留候选状态，不伪造原文。</p>
-      </section>
-
-      <DiagnosticsPanel />
-      <BackupPanel />
-      </details>
-
-      <section className="feature-section" aria-labelledby="feature-heading">
-        <div className="section-heading-row">
-          <div><span className="eyebrow">学习工具</span><h2 id="feature-heading">快速入口</h2></div>
-          <span className="section-hint">进入功能前先选择课程</span>
-        </div>
-        <div className="feature-grid">
-          {features.map((feature, index) => (
-            <button className={`feature-card feature-card-${feature}`} key={feature} onClick={() => setRequestedFeature(feature)}>
-              <span className="feature-card-icon" aria-hidden="true">
-                {feature === 'notes' ? '▤' : feature === 'knowledge-tree' ? '⌘' : feature === 'materials' ? '▱' : '✧'}
-              </span>
-              <span className="feature-card-copy"><strong>{featureLabels[feature]}</strong><small>{featureDescriptions[feature]}</small></span>
-              <span className="feature-card-number">0{index + 1}</span>
-              <span className="feature-card-arrow" aria-hidden="true">↗</span>
+        <form className="home-question-composer" onSubmit={handleQuestionSubmit}>
+          <textarea
+            aria-label="课程问题"
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            placeholder={questionCourse ? `问问「${questionCourse.name}」里的内容…` : '先创建或选择一门课程，再提问…'}
+            rows={3}
+          />
+          <div className="home-composer-toolbar">
+            <div className="home-composer-tools">
+              <button type="button" aria-label="打开课程资料上传课件" title="打开课程资料上传课件" onClick={openCourseMaterials}>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.7 12.9 14.8 6.8a3.2 3.2 0 0 1 4.5 4.5l-8.1 8.1a5 5 0 0 1-7.1-7.1l8.2-8.2"/><path d="m7.3 14.3 7.1-7.1"/></svg>
+              </button>
+              <button type="button" aria-label="查看课程资料" title="查看课程资料" onClick={openCourseMaterials}>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="2.5"/><circle cx="9" cy="9" r="1.5"/><path d="m5 17 5-5 3.2 3.2 2.2-2.2 3.6 4"/></svg>
+              </button>
+              {courses.length > 1 ? (
+                <select aria-label="提问课程" value={questionCourse?.id ?? ''} onChange={(event) => setQuestionCourseId(event.target.value)}>
+                  <option value="" disabled>选择课程</option>
+                  {courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}
+                </select>
+              ) : questionCourse ? <span className="home-question-course">{questionCourse.name}</span> : null}
+            </div>
+            <button className="home-question-send" type="submit" disabled={!questionCourse || !question.trim()}>
+              发送 <span aria-hidden="true">➤</span>
             </button>
-          ))}
-        </div>
-      </section>
+          </div>
+        </form>
 
-      <section className="courses-section home-courses-section" aria-labelledby="courses-heading" ref={courseListRef}>
-        <div className="section-heading-row">
-          <div><h2 id="courses-heading">我的课程</h2><p>选择课程继续学习，课程内容会保存在本机。</p></div>
-          <span className="course-count-label">{courses.length} 门课程</span>
-        </div>
+        <div className="home-lower-grid">
+          <section className="home-content-panel home-recent-panel" aria-labelledby="recent-notes-title">
+            <header className="home-panel-heading">
+              <h2 id="recent-notes-title"><span aria-hidden="true">▤</span>最近笔记</h2>
+              {recentNotes.length > 0 && <button type="button" onClick={() => navigate('/notes')} aria-label="打开全部笔记">···</button>}
+            </header>
+            {coursesLoading ? <p className="home-panel-empty">正在读取笔记…</p> : recentNotes.length ? (
+              <div className="home-recent-list">
+                {recentNotes.map(({ note, course }, index) => (
+                  <button className="home-recent-note" key={note.id} onClick={() => navigate(`/courses/${course.id}/notes/${note.id}`)}>
+                    <span className={`home-recent-note-icon home-recent-note-icon-${index}`} aria-hidden="true">{index === 0 ? '文' : index === 1 ? '记' : '知'}</span>
+                    <span className="home-recent-note-copy"><strong>{note.title}</strong><small>{course.name} · {formatShortDate(note.updated_at)}</small></span>
+                    <span className="home-recent-note-arrow" aria-hidden="true">···</span>
+                  </button>
+                ))}
+              </div>
+            ) : <p className="home-panel-empty">课程笔记会显示在这里。</p>}
+          </section>
 
-        {coursesLoading ? (
-          <div className="home-empty-state">正在读取本机课程…</div>
-        ) : courses.length ? (
-          <div className="home-course-grid">
-            {courses.map((course, index) => (
-              <article className="home-course-entry" key={course.id}>
-                <button className="home-course-card" onClick={() => navigate(`/courses/${course.id}`)} aria-label={`打开课程：${course.name}`}>
-                  <span className={`home-course-symbol home-course-symbol-${index % 3}`}>{course.name.slice(0, 1)}</span>
-                  <span className="home-course-copy"><strong>{course.name}</strong><small>{materialCounts[course.id] ?? 0} 份资料 · {getLastVisited(course.id) ? `最近学习 ${new Date(getLastVisited(course.id)!).toLocaleDateString('zh-CN')}` : `创建于 ${new Date(course.created_at).toLocaleDateString('zh-CN')}`}</small></span>
-                  <span className="home-course-arrow" aria-hidden="true">→</span>
+          <section className="home-content-panel home-learning-panel" id="home-current-course" aria-labelledby="current-course-title">
+            <header className="home-panel-heading">
+              <h2 id="current-course-title"><span aria-hidden="true">⌂</span>正在学习</h2>
+              <button type="button" onClick={openCreateCourse} aria-label="新建课程">＋</button>
+            </header>
+            {coursesLoading ? <p className="home-panel-empty">正在读取课程…</p> : questionCourse ? (
+              <>
+                <button className="home-learning-course" onClick={() => navigate(`/courses/${questionCourse.id}`)}>
+                  <span className="home-learning-illustration" aria-hidden="true">
+                    <svg viewBox="0 0 112 104"><rect x="12" y="22" width="68" height="52" rx="5"/><path d="M5 82h83M35 74v8m23-8v8M32 43l-9 9 9 9m20-18 9 9-9 9m-3-15-8 13"/><path d="M83 62h23v7H83zm-4 11h27v7H79z"/></svg>
+                  </span>
+                  <span className="home-learning-course-copy"><strong>{questionCourse.name}</strong><small>{materialCounts[questionCourse.id] ?? 0} 份课程资料 · {getLastVisited(questionCourse.id) ? `最近学习 ${formatShortDate(getLastVisited(questionCourse.id)!)}` : '开始你的课程学习'}</small></span>
+                  <span className="home-learning-arrow" aria-hidden="true">→</span>
                 </button>
-                <details className="home-course-actions">
-                  <summary aria-label={`管理课程：${course.name}`} title="课程操作">···</summary>
-                  <div className="home-course-action-menu">
-                    <button type="button" disabled={backupBusy === course.id} onClick={() => void exportCourseBackup(course)}>{backupBusy === course.id ? '正在生成备份…' : '导出课程备份'}</button>
-                    <button className="home-course-remove-action" type="button" onClick={() => void requestCourseRemoval(course)}>移除课程</button>
-                  </div>
-                </details>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="home-empty-state">
-            <span className="empty-state-mark">＋</span>
-            <div><strong>还没有课程</strong><p>创建第一门课程，再上传课件、整理笔记和知识点。</p><button className="text-button" type="button" onClick={openCreateCourse}>创建第一门课程 →</button></div>
-          </div>
-        )}
-        {courseActionError && <p className="form-error" role="alert">{courseActionError}</p>}
-        {backupMessage && <p className="form-success" role="status">{backupMessage}</p>}
-        {deletedCourses.length > 0 && <details className="home-restored-courses"><summary>可恢复的课程 · {deletedCourses.length}</summary>{deletedCourses.map((course) => <div className="home-restored-course" key={course.id}><span>{course.name}</span><button className="text-button" onClick={() => void restoreCourse(course.id)}>恢复课程</button></div>)}</details>}
-      </section>
+                {courses.length > 1 && <label className="home-switch-course">切换课程<select aria-label="切换正在学习的课程" value={questionCourse.id} onChange={(event) => setQuestionCourseId(event.target.value)}>{courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}</select></label>}
+              </>
+            ) : <div className="home-panel-empty home-no-course"><p>创建课程后，这里会显示你的学习进度。</p><button className="text-button" type="button" onClick={openCreateCourse}>＋ 创建课程</button></div>}
+          </section>
+        </div>
 
-      {attentionMaterials.length > 0 && <section className="home-attention-section" aria-label="需要关注的资料"><div className="section-heading-row"><div><span className="eyebrow">课程处理提醒</span><h2>需要关注</h2></div></div><div className="home-attention-list">{attentionMaterials.map((material) => {
+        {attentionMaterials.length > 0 && <details className="home-secondary-panel home-attention-disclosure"><summary>资料处理提醒 · {attentionMaterials.length}</summary><div className="home-attention-list">{attentionMaterials.map((material) => {
         const course = courses.find((item) => item.id === material.course_id)
         return <button className={`home-attention-item home-attention-${material.status}`} key={material.id} onClick={() => navigate(`/courses/${material.course_id}/materials`)}><span className="home-attention-mark">{material.status === 'failed' ? '!' : '·'}</span><span><strong>{course?.name} · {material.lecture_title}</strong><small>{material.status === 'failed' ? '解析失败，打开资料查看错误并重试。' : material.status === 'pending' ? '资料等待处理。' : '资料正在解析。'}</small></span><span aria-hidden="true">→</span></button>
-      })}</div></section>}
+      })}</div></details>}
+      </div>
+
+      <aside className="home-teacher-column" aria-label="AI 教师">
+        <div className="home-teacher-frame"><TeacherCharacter /></div>
+      </aside>
 
       {requestedFeature && (
         <CourseGate feature={requestedFeature} onClose={() => setRequestedFeature(undefined)} />
@@ -266,7 +214,7 @@ export function HomePage() {
           <button className="modal-close" type="button" onClick={() => setShowCreateCourseDialog(false)} disabled={creating} aria-label="关闭">×</button>
           <span className="eyebrow">新的学习空间</span>
           <h2 id="create-course-title">创建课程</h2>
-          <p className="muted-copy">课程资料、笔记和知识树会分别保存在这个空间中。</p>
+          <p className="muted-copy">课程资料、笔记和知识结构会分别保存在这个空间中。</p>
           <form className="home-create-course" onSubmit={handleCreateCourse}>
             <label htmlFor="home-course-name">课程名称</label>
             <div className="home-create-course-row">
@@ -277,27 +225,23 @@ export function HomePage() {
           </form>
         </section>
       </div>}
-      {courseRemoval && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !removingCourse) setCourseRemoval(undefined) }}>
-        <section className="course-gate-modal home-course-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="remove-course-title">
-          <button className="modal-close" type="button" onClick={() => setCourseRemoval(undefined)} disabled={removingCourse} aria-label="关闭">×</button>
-          <span className="eyebrow">课程数据管理</span>
-          <h2 id="remove-course-title">移除“{courseRemoval.course.name}”？</h2>
-          <p className="muted-copy">课程会从列表中隐藏，系统会先自动备份。之后可在“可恢复的课程”中恢复。</p>
-          <div className="course-delete-impact">
-            <span><strong>{courseRemoval.impact.materials}</strong><small>份资料</small></span>
-            <span><strong>{courseRemoval.impact.pages}</strong><small>个页面</small></span>
-            <span><strong>{courseRemoval.impact.user_notes_protected}</strong><small>条已保护笔记</small></span>
-          </div>
-          <div className="home-course-delete-actions">
-            <button className="secondary-button" type="button" onClick={() => setCourseRemoval(undefined)} disabled={removingCourse}>保留课程</button>
-            <button className="danger-button" type="button" onClick={() => void confirmCourseRemoval()} disabled={removingCourse}>{removingCourse ? '正在移除…' : '确认移除课程'}</button>
-          </div>
-        </section>
-      </div>}
     </div>
   )
 }
 
 function getLastVisited(courseId: string): string | null {
   try { return localStorage.getItem(`notebuddy.course.${courseId}.lastVisited`) } catch { return null }
+}
+
+function getMostRecentlyVisitedCourse(courses: Course[]): Course | undefined {
+  return [...courses].sort((left, right) => {
+    const leftDate = getLastVisited(left.id) ?? left.created_at
+    const rightDate = getLastVisited(right.id) ?? right.created_at
+    return rightDate.localeCompare(leftDate)
+  })[0]
+}
+
+function formatShortDate(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
 }

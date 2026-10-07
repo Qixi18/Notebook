@@ -1,40 +1,19 @@
-import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
-import { api } from '../api'
-import { featureDescriptions, featureLabels, featurePath, useWorkspace, type Feature } from '../components/AppLayout'
+import { featurePath, useWorkspace } from '../components/AppLayout'
 import { ProcessingStatus } from '../components/ProcessingStatus'
+import { CourseKnowledgeStructure } from './CourseKnowledgeStructure'
 
-const features: Feature[] = ['notes', 'knowledge-tree', 'materials', 'assistant']
-
-const materialStatus: Record<string, string> = {
-  pending: '等待解析',
-  processing: '解析中',
-  completed: '已完成',
-  failed: '解析失败',
-}
+type CourseTab = 'overview' | 'structure'
 
 export function CourseOverviewPage() {
   const { courseId = '' } = useParams()
   const { course, courseContentLoading, materials, notes, graph, job, coursesLoading, refreshCourses } = useWorkspace()
-  const [coverage, setCoverage] = useState({ cited: 0, total: 0, review: 0 })
+  const [activeTab, setActiveTab] = useState<CourseTab>('overview')
+  const navigate = useNavigate()
 
-  useEffect(() => {
-    let active = true
-    void Promise.all(materials.map((material) => api.getCoverage(material.id)))
-      .then((items) => {
-        if (!active) return
-        setCoverage({
-          cited: items.reduce((sum, item) => sum + item.cited_locations, 0),
-          total: items.reduce((sum, item) => sum + item.total_locations, 0),
-          review: items.reduce((sum, item) => sum + item.review_locations, 0),
-        })
-      })
-      .catch(() => { if (active) setCoverage({ cited: 0, total: 0, review: 0 }) })
-    return () => { active = false }
-  }, [materials])
-
-  if (coursesLoading) return <div className="page-loading">正在读取课程…</div>
+  if (coursesLoading) return <div className="page-loading" role="status">正在读取课程…</div>
   if (!course) {
     return (
       <section className="route-state-card" role="alert">
@@ -48,67 +27,64 @@ export function CourseOverviewPage() {
   }
 
   const latestMaterial = materials[0]
-  const latestIsReady = latestMaterial?.status === 'completed'
-  const statusCounts = materials.reduce((counts, material) => {
-    counts[material.status] = (counts[material.status] ?? 0) + 1
-    return counts
-  }, {} as Record<string, number>)
+  const materialCount = materials.length
+  const readyCount = materials.filter((material) => material.status === 'completed').length
 
   return (
-    <div className="course-overview page-enter">
-      <header className="page-heading-block">
+    <div className="course-overview course-workspace page-enter">
+      <header className="course-workspace-heading">
         <div>
-          <span className="eyebrow">课程学习空间</span>
           <h1>{course.name}</h1>
-          <p>{course.description || '这门课程的资料、笔记和知识结构都集中在这里。'}</p>
+          <p>{course.description || '把课程资料、学习笔记和知识结构整理在一起。'}</p>
         </div>
-        <Link className="primary-button link-button" to={featurePath(courseId, 'materials')}>＋ 上传课程资料</Link>
+        <div className="course-workspace-actions">
+          <button className="secondary-button" type="button" onClick={() => navigate('/', { state: { openCreateCourse: true } })}>＋ 新建课程</button>
+          <Link className="primary-button link-button" to={featurePath(courseId, 'materials')}>上传课程资料</Link>
+        </div>
       </header>
 
-      <section className="course-summary-grid" aria-label="课程概况">
-        <article className="summary-card"><span>资料</span><strong>{materials.length}</strong><small>份课程资料</small></article>
-        <article className="summary-card"><span>资料页数</span><strong>{materials.reduce((total, material) => total + material.page_count, 0)}</strong><small>课件页面</small></article>
-        <article className="summary-card"><span>知识点</span><strong>{graph.nodes.length}</strong><small>个课程节点</small></article>
-        <article className="summary-card"><span>笔记</span><strong>{notes.length}</strong><small>条可复习内容</small></article>
-        <article className="summary-card"><span>来源覆盖</span><strong>{coverage.cited}/{coverage.total}</strong><small>{coverage.review} 个位置待检查</small></article>
-      </section>
+      <div className="course-tabs" role="tablist" aria-label="课程内容">
+        <button id="course-tab-overview" type="button" role="tab" aria-selected={activeTab === 'overview'} aria-controls="course-panel-overview" className={activeTab === 'overview' ? 'course-tab-active' : ''} onClick={() => setActiveTab('overview')}>课程概览</button>
+        <button id="course-tab-structure" type="button" role="tab" aria-selected={activeTab === 'structure'} aria-controls="course-panel-structure" className={activeTab === 'structure' ? 'course-tab-active' : ''} onClick={() => setActiveTab('structure')}>知识结构</button>
+      </div>
 
-      {courseContentLoading ? <div className="page-loading" role="status">正在汇总课程进度…</div> : <section className="course-processing-summary" aria-label="资料处理进度">
-        <div className="course-processing-heading"><div><span className="eyebrow">资料状态</span><h2>课程材料处理概况</h2></div><span>{materials.length} 份资料</span></div>
-        <div className="course-status-counts">
-          <span><i className="status-indicator status-indicator-completed" />已完成 <strong>{statusCounts.completed ?? 0}</strong></span>
-          <span><i className="status-indicator status-indicator-processing" />处理中 <strong>{(statusCounts.pending ?? 0) + (statusCounts.processing ?? 0)}</strong></span>
-          <span><i className="status-indicator status-indicator-failed" />需检查 <strong>{statusCounts.failed ?? 0}</strong></span>
-        </div>
-        {latestMaterial && <ProcessingStatus job={job?.material_id === latestMaterial.id ? job : undefined} material={latestMaterial} />}
-      </section>}
+      {activeTab === 'overview' ? (
+        <section id="course-panel-overview" className="course-overview-panel" role="tabpanel" aria-labelledby="course-tab-overview">
+          <div className="course-overview-intro">
+            <div className="course-overview-mark" aria-hidden="true">⌂</div>
+            <div><h2>继续这门课程</h2><p>{materialCount ? `${readyCount} 份资料已完成整理。` : '上传课件后，NoteBuddy 会将来源、知识结构和学习笔记归入当前课程。'}</p></div>
+          </div>
 
-      <section className="course-next-step">
-        <div className="next-step-mark">{latestMaterial ? '✓' : '1'}</div>
-        <div>
-          <span className="eyebrow">接下来</span>
-          <h2>{!latestMaterial ? '上传第一份课程资料' : latestIsReady ? '继续整理这门课程' : latestMaterial.status === 'failed' ? '检查未完成的解析' : '资料正在准备中'}</h2>
-          <p>{latestMaterial ? latestIsReady ? `最近资料“${latestMaterial.lecture_title}”已完成解析，可以继续查看笔记和知识结构。` : `最近资料“${latestMaterial.lecture_title}”当前状态：${materialStatus[latestMaterial.status] ?? latestMaterial.status}。` : '先上传 PPTX、PDF 或 DOCX 课件，NoteBuddy 会按当前支持的流程解析位置并整理知识点。'}</p>
-        </div>
-        <Link className="secondary-button link-button" to={featurePath(courseId, latestIsReady ? 'notes' : 'materials')}>
-          {latestIsReady ? '打开笔记' : latestMaterial?.status === 'failed' ? '查看资料状态' : '前往课程资料'}
-        </Link>
-      </section>
-
-      <section className="course-tools-section">
-        <div className="section-heading-row">
-          <div><span className="eyebrow">课程功能</span><h2>继续学习</h2></div>
-        </div>
-        <div className="course-tool-grid">
-          {features.map((feature, index) => (
-            <Link className="course-tool-card" key={feature} to={featurePath(courseId, feature)}>
-              <span className={`course-tool-number course-tool-number-${index}`}>0{index + 1}</span>
-              <span><strong>{featureLabels[feature]}</strong><small>{featureDescriptions[feature]}</small></span>
-              <span className="course-tool-arrow" aria-hidden="true">↗</span>
+          <div className="course-entry-list">
+            <Link className="course-entry-row" to={featurePath(courseId, 'materials')}>
+              <span className="course-entry-icon" aria-hidden="true">▱</span>
+              <span className="course-entry-copy"><strong>课程资料</strong><small>{materialCount ? `${materialCount} 份资料 · 查看解析状态与页码来源` : '上传课件并查看解析状态与页码来源'}</small></span>
+              <span className="course-entry-arrow" aria-hidden="true">→</span>
             </Link>
-          ))}
-        </div>
-      </section>
+            <Link className="course-entry-row" to="/notes">
+              <span className="course-entry-icon course-entry-icon-notes" aria-hidden="true">▤</span>
+              <span className="course-entry-copy"><strong>课程笔记</strong><small>{notes.length ? `${notes.length} 条笔记 · 阅读、编辑并核对引用` : '阅读整理内容，或从已解析的资料开始生成'}</small></span>
+              <span className="course-entry-arrow" aria-hidden="true">→</span>
+            </Link>
+            <button className="course-entry-row" type="button" onClick={() => setActiveTab('structure')}>
+              <span className="course-entry-icon course-entry-icon-structure" aria-hidden="true">⌘</span>
+              <span className="course-entry-copy"><strong>知识结构</strong><small>{graph.nodes.length ? `${graph.nodes.length} 个知识点 · 查看课程脉络与关联` : '从课程资料整理知识点和概念关联'}</small></span>
+              <span className="course-entry-arrow" aria-hidden="true">→</span>
+            </button>
+          </div>
+
+          {courseContentLoading ? <p className="course-loading-inline" role="status">正在读取课程内容…</p> : latestMaterial ? (
+            <section className="course-latest-material" aria-label="最近课程资料">
+              <div><span>最近课程资料</span><strong>{latestMaterial.lecture_title}</strong><small>{latestMaterial.original_filename}</small></div>
+              <ProcessingStatus job={job?.material_id === latestMaterial.id ? job : undefined} material={latestMaterial} />
+            </section>
+          ) : <p className="course-first-upload-hint">先从一份 PPTX、PDF 或 DOCX 课件开始。</p>}
+        </section>
+      ) : (
+        <section id="course-panel-structure" className="course-structure-panel" role="tabpanel" aria-labelledby="course-tab-structure">
+          <CourseKnowledgeStructure />
+        </section>
+      )}
     </div>
   )
 }

@@ -7,7 +7,7 @@ import { featurePath, useWorkspace } from '../components/AppLayout'
 import { SourceCard } from '../components/SourceCard'
 import type { KnowledgeProposal, NoteSourceRef } from '../types'
 
-export function KnowledgeTreePage() {
+export function CourseKnowledgeStructure() {
   const { courseId = '' } = useParams()
   const { course, courseContentLoading, graph, notes, materials, setSelectedMaterialId, setSelectedPageNumber, setSelectedNoteId } = useWorkspace()
   const [query, setQuery] = useState('')
@@ -82,7 +82,7 @@ export function KnowledgeTreePage() {
   function openNodeNote() {
     if (!selectedNote) return
     setSelectedNoteId(selectedNote.id)
-    navigate(featurePath(courseId, 'notes'))
+    navigate(`/courses/${courseId}/notes/${selectedNote.id}`)
   }
 
   function openSource(source: NoteSourceRef) {
@@ -92,14 +92,9 @@ export function KnowledgeTreePage() {
   }
 
   return (
-    <div className="feature-page page-enter">
-      <header className="page-heading-block compact-heading">
-        <div><span className="eyebrow">{course?.name ?? '当前课程'}</span><h1>课程知识树</h1><p>按当前课程已整理出的知识点与关系浏览。</p></div>
-        <span className="page-count-pill">{graph.nodes.length} 个节点 · {graph.edges.length} 条关系 · {proposals.length} 条待确认</span>
-      </header>
-
+    <div className="course-knowledge-structure">
       {courseContentLoading ? <div className="page-loading" role="status">正在读取知识图谱…</div> : graph.nodes.length === 0 ? (
-        <EmptyState icon="⌘" title="知识树还在等待第一批知识点" description="上传并解析课程资料后，提取出的知识点会显示在这里。" action={<Link className="secondary-button link-button" to={featurePath(courseId, 'materials')}>前往课程资料</Link>} />
+        <EmptyState icon="⌘" title="课程知识结构尚未整理" description="上传并解析课程资料后，课程知识点会显示在这里。" action={<Link className="secondary-button link-button" to={featurePath(courseId, 'materials')}>前往课程资料</Link>} />
       ) : (
         <section className="knowledge-tree-layout">
           <div className="knowledge-canvas-panel">
@@ -112,7 +107,7 @@ export function KnowledgeTreePage() {
               </div>
             </div>
 
-            <div className="tree-legend" aria-label="知识树图例"><span><i className="legend-course" />课程</span><span><i className="legend-lecture" />课程讲次</span><span><i className="legend-point" />知识点</span><span><i className="legend-current" />当前选中</span><span><i className="legend-core" />关联较多</span><span><i className="legend-support" />关联较少</span><span title="依据当前图中的关系数量启发式区分，不代表人工审核过的知识重要性。">分类按关系数量估算</span></div>
+            <div className="tree-legend" aria-label="课程知识结构图例"><span><i className="legend-course" />课程</span><span><i className="legend-lecture" />课程讲次</span><span><i className="legend-point" />知识点</span><span><i className="legend-current" />当前选中</span><span><i className="legend-core" />关联较多</span><span><i className="legend-support" />关联较少</span><span title="依据当前图中的关系数量启发式区分，不代表人工审核过的知识重要性。">分类按关系数量估算</span></div>
 
             {visibleNodes.length === 0 ? <div className="inline-empty" role="status">没有找到匹配的知识点，请更换搜索词或清除筛选。</div> : (
               <>

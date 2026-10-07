@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { Outlet, useBlocker, useLocation, useNavigate } from 'react-router-dom'
 
 import type {
@@ -10,10 +10,11 @@ import type {
   Note,
   Page,
 } from '../types'
+import { AssistantDock } from './AssistantDock'
 import { ConfirmDialog } from './ConfirmDialog'
 import { CourseSwitcher } from './CourseSwitcher'
 
-export type Feature = 'notes' | 'knowledge-tree' | 'materials' | 'assistant'
+export type Feature = 'notes' | 'materials' | 'assistant'
 
 export type ChatMessage = {
   role: 'user' | 'assistant'
@@ -87,27 +88,32 @@ export function useWorkspace(): WorkspaceContextValue {
 
 const featureLabels: Record<Feature, string> = {
   notes: '笔记',
-  'knowledge-tree': '知识树',
   materials: '课程资料',
   assistant: 'AI 答疑',
 }
 
 const featureDescriptions: Record<Feature, string> = {
   notes: '整理与编辑课程笔记',
-  'knowledge-tree': '查看课程知识结构',
   materials: '上传课件并检查解析结果',
   assistant: '基于当前课程资料提问',
 }
 
 export function featurePath(courseId: string, feature: Feature): string {
+  if (feature === 'notes') return '/notes'
   return `/courses/${courseId}/${feature}`
 }
 
 export function AppLayout() {
-  const { courseId, course, courses, coursesLoading, error, setError, noteDirty } = useWorkspace()
+  const { courseId, course, courses, coursesLoading, error, setError, noteDirty, messages, question, setQuestion, askQuestion, assistantBusy } = useWorkspace()
   const navigate = useNavigate()
   const location = useLocation()
+  const isHome = location.pathname === '/'
+  const isAssistantPage = location.pathname.endsWith('/assistant')
+  const showAssistantDock = !isHome && !isAssistantPage
   const activeFeature = location.pathname.split('/')[3] as Feature | undefined
+  const isCoursesPage = location.pathname === '/courses' || /^\/courses\/[^/]+$/.test(location.pathname)
+  const isNotesLibrary = location.pathname === '/notes' || location.pathname.startsWith('/courses/') && location.pathname.includes('/notes/')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('notebuddy.sidebar-collapsed') === 'true')
   const blocker = useBlocker(({ currentLocation, nextLocation }) => noteDirty && currentLocation.pathname !== nextLocation.pathname)
 
   useEffect(() => {
@@ -117,7 +123,15 @@ export function AppLayout() {
     return () => window.removeEventListener('beforeunload', warnBeforeUnload)
   }, [noteDirty])
 
+  useEffect(() => {
+    localStorage.setItem('notebuddy.sidebar-collapsed', String(sidebarCollapsed))
+  }, [sidebarCollapsed])
+
   function openFeature(feature: Feature) {
+    if (feature === 'notes') {
+      navigate('/notes')
+      return
+    }
     if (courseId) {
       navigate(featurePath(courseId, feature))
     } else {
@@ -126,31 +140,39 @@ export function AppLayout() {
   }
 
   return (
-    <div className="app-shell">
-      <aside className="app-sidebar">
+    <div className={`app-shell${isHome ? ' app-shell-home' : showAssistantDock ? ' app-shell-with-assistant' : ''}${sidebarCollapsed ? ' app-shell-sidebar-collapsed' : ''}`}>
+      <aside className={`app-sidebar${isHome ? ' app-sidebar-home' : ''}`}>
         <button className="brand-lockup" onClick={() => navigate('/')} aria-label="返回首页">
-          <span className="brand-mark">N</span>
+          <span className="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.7 3.8c-7 .3-12.4 2.4-14.6 6.8-1.5 3 .1 6.1 3.2 6.4 4.9.5 9.1-4.7 11.4-13.2Z"/><path d="M4.6 21c1.9-5.4 5.3-8.9 10.4-11.8"/></svg></span>
           <span><strong>NoteBuddy</strong><small>课程学习空间</small></span>
+        </button>
+
+        <button className="sidebar-collapse-toggle" type="button" aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'} aria-expanded={!sidebarCollapsed} onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}>
+          <span aria-hidden="true">{sidebarCollapsed ? '›' : '‹'}</span><span className="sidebar-collapse-label">{sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}</span>
         </button>
 
         <div className="sidebar-section-label">学习空间</div>
         <button className={`sidebar-link ${location.pathname === '/' ? 'sidebar-link-active' : ''}`} onClick={() => navigate('/')}>
-          <span className="sidebar-link-icon">⌂</span>首页
+          <span className="sidebar-link-icon" aria-hidden="true">⌂</span><span>首页</span>
+        </button>
+        <button className={`sidebar-link ${isCoursesPage ? 'sidebar-link-active' : ''}`} onClick={() => navigate('/courses')}>
+          <span className="sidebar-link-icon" aria-hidden="true">⌂</span><span>课程</span>
         </button>
         {(Object.keys(featureLabels) as Feature[]).map((feature) => (
           <button
-            className={`sidebar-link ${activeFeature === feature ? 'sidebar-link-active' : ''}`}
+            className={`sidebar-link ${((feature === 'notes' && isNotesLibrary) || (feature !== 'notes' && activeFeature === feature)) ? 'sidebar-link-active' : ''}`}
             key={feature}
             onClick={() => openFeature(feature)}
+            title={sidebarCollapsed ? featureLabels[feature] : undefined}
           >
             <span className="sidebar-link-icon" aria-hidden="true">
-              {feature === 'notes' ? '▤' : feature === 'knowledge-tree' ? '⌘' : feature === 'materials' ? '▱' : '✧'}
+              {feature === 'notes' ? '▤' : feature === 'materials' ? '▱' : '✧'}
             </span>
-            {featureLabels[feature]}
+            <span>{featureLabels[feature]}</span>
           </button>
         ))}
 
-        <CourseSwitcher
+        {!isHome && !isNotesLibrary && !isCoursesPage && <CourseSwitcher
           course={course}
           courses={courses}
           loading={coursesLoading}
@@ -158,14 +180,25 @@ export function AppLayout() {
             const feature = activeFeature && featureLabels[activeFeature] ? activeFeature : undefined
             navigate(feature ? featurePath(nextCourseId, feature) : `/courses/${nextCourseId}`)
           }}
-        />
+        />}
+
+        {isHome && !sidebarCollapsed && <svg className="home-sidebar-doodle" viewBox="0 0 220 132" aria-hidden="true">
+          <path d="M14 116c47-8 128-9 192 1" fill="none" stroke="#ded7c3" strokeWidth="3" strokeLinecap="round"/>
+          <path d="M57 81c-4-17 3-28 13-36 5 13 3 24-5 34m13 2c0-20 9-32 22-39 2 16-4 29-16 40m-39-2c-10-12-10-24-5-36 13 7 19 17 17 31" fill="#86aa70" stroke="#6c965b" strokeWidth="2" strokeLinejoin="round"/>
+          <path d="M45 82h48l-6 30H51z" fill="#d7bd92" stroke="#aa8f65" strokeWidth="2"/>
+          <path d="M94 101h51v11H94zm7-14h50v11h-50zm8-14h45v11h-45" fill="#f4f2e7" stroke="#526f61" strokeWidth="2" strokeLinejoin="round"/>
+          <path d="M149 95c10-11 24-8 31 1l15 1c5 0 9 5 8 10l-1 5h-37c-8 0-14-5-16-12Z" fill="#fffdf6" stroke="#34483d" strokeWidth="2.5" strokeLinejoin="round"/>
+          <path d="M181 94c3-8 11-10 16-7l-3 10m-25 4h1m16 0h1m-10 4 4 2 4-2" fill="none" stroke="#34483d" strokeWidth="2" strokeLinecap="round"/>
+          <path d="m186 89 2-7m-2 8 7-4" fill="none" stroke="#34483d" strokeWidth="2" strokeLinecap="round"/>
+          <path d="m20 37 4-8m10 14 7-4" fill="none" stroke="#729768" strokeWidth="3" strokeLinecap="round"/>
+        </svg>}
 
         <div className="sidebar-footer">
           <span className="local-status-dot" />本地学习空间 · 数据保存在本机
         </div>
       </aside>
 
-      <main className="app-main">
+      <main className={`app-main${isHome ? ' app-main-home' : ''}`}>
         {error && (
           <div className="global-alert" role="alert">
             <span>{error}</span>
@@ -174,6 +207,7 @@ export function AppLayout() {
         )}
         <Outlet />
       </main>
+      {showAssistantDock && <AssistantDock course={course} courseId={courseId} courses={courses} messages={messages} question={question} setQuestion={setQuestion} askQuestion={askQuestion} assistantBusy={assistantBusy} />}
       {blocker.state === 'blocked' && <ConfirmDialog
         eyebrow="未保存的笔记"
         title="离开正在编辑的笔记？"

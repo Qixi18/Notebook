@@ -1,12 +1,13 @@
-import { Link, Route, Routes } from 'react-router-dom'
+import { Link, Navigate, Route, Routes } from 'react-router-dom'
 
 import { AppLayout, WorkspaceProvider } from './components/AppLayout'
 import { CourseRouteGuard } from './components/CourseGate'
 import { useWorkspaceState } from './features/workspace/useWorkspaceState'
 import { AssistantPage } from './pages/AssistantPage'
 import { CourseOverviewPage } from './pages/CourseOverviewPage'
+import { CourseLibraryPage } from './pages/CourseLibraryPage'
 import { HomePage } from './pages/HomePage'
-import { KnowledgeTreePage } from './pages/KnowledgeTreePage'
+import { NotesLibraryPage } from './pages/NotesLibraryPage'
 import { MaterialsPage } from './pages/MaterialsPage'
 import { NotesPage } from './pages/NotesPage'
 
@@ -29,9 +30,11 @@ function App() {
       <Routes>
         <Route element={<AppLayout />}>
           <Route index element={<HomePage />} />
+          <Route path="/courses" element={<CourseLibraryPage />} />
           <Route path="/courses/:courseId" element={<CourseRouteGuard><CourseOverviewPage /></CourseRouteGuard>} />
-          <Route path="/courses/:courseId/notes" element={<CourseRouteGuard><NotesPage /></CourseRouteGuard>} />
-          <Route path="/courses/:courseId/knowledge-tree" element={<CourseRouteGuard><KnowledgeTreePage /></CourseRouteGuard>} />
+          <Route path="/notes" element={<NotesLibraryPage />} />
+          <Route path="/courses/:courseId/notes" element={<Navigate to="/notes" replace />} />
+          <Route path="/courses/:courseId/notes/:noteId" element={<CourseRouteGuard><NotesPage /></CourseRouteGuard>} />
           <Route path="/courses/:courseId/materials" element={<CourseRouteGuard><MaterialsPage /></CourseRouteGuard>} />
           <Route path="/courses/:courseId/assistant" element={<CourseRouteGuard><AssistantPage /></CourseRouteGuard>} />
           <Route path="*" element={<NotFoundPage />} />
