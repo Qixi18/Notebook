@@ -1,0 +1,48 @@
+#!/bin/sh
+# NoteBuddy 提交前密钥防护。
+#
+# 目的：即便有人不小心把 .env 加进暂存区、或把密钥硬编码进源码，
+# 也在提交发生之前拦下来。本地单用户项目，宁可误报也不要漏放。
+#
+# 绕过方式（确认无误时才用）：git commit --no-verify
+
+set -e
+
+fail() {
+    printf '\n\033[31m[pre-commit] 提交被拒绝：%s\033[0m\n\n' "$1"
+    exit 1
+}
+
+# 1) 禁止提交任何 .env 实体文件（.env.example 是模板，允许）
+staged_env=$(git diff --cached --name-only --diff-filter=ACM \
+    | grep -E '(^|/)\.env($|\.)' \
+    | grep -v '\.env\.example$' || true)
+if [ -n "$staged_env" ]; then
+    printf '%s\n' "$staged_env"
+    fail "检测到 .env 实体文件被暂存。密钥必须只留在本地，请执行：git reset HEAD <文件>"
+fi
+
+# 2) 禁止提交数据库、课件原文、备份等本地数据
+staged_data=$(git diff --cached --name-only --diff-filter=ACM \
+    | grep -E '(^|/)data/.*\.(sqlite3|sqlite|db|bak|pptx|pdf|docx)$' || true)
+if [ -n "$staged_data" ]; then
+    printf '%s\n' "$staged_data"
+    fail "检测到本地数据/课件文件被暂存。这些内容不应进入版本库。"
+fi
+
+# 3) 扫描新增内容中的疑似密钥字面量
+staged_content=$(git diff --cached -U0 --diff-filter=ACM \
+    | grep -E '^\+' \
+    | grep -Evi 'example|placeholder|your[-_]?(api[-_]?)?key|xxx|\*\*\*|sk-\.\.\.|test[-_]?key|dummy|fake|attacker|leak' \
+    | grep -E '(sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----)' || true)
+if [ -n "$staged_content" ]; then
+    printf '%s\n' "$staged_content" | head -5
+    fail "新增内容中疑似包含真实密钥。请改用环境变量或 .env（已被 gitignore）。"
+fi
+
+# 4) 提醒：.env 必须始终处于忽略状态
+if ! git check-ignore -q .env; then
+    fail ".env 当前未被 .gitignore 忽略，存在泄露风险。请先修复 .gitignore。"
+fi
+
+exit 0

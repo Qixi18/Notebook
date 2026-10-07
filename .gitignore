@@ -10,11 +10,19 @@ __pycache__/
 .ruff_cache/
 
 # Local configuration and data
+# 密钥只允许留在本地 .env（由设置面板写入），永不提交。
 .env
 .env.*
 !.env.example
 data/*
 !data/.gitkeep
+
+# 本地数据库 / 备份 / 课件原文的兜底防护
+*.sqlite
+*.sqlite3
+*.db
+*.bak
+data/backups/
 
 # IDE and OS files
 .vscode/
@@ -25,4 +33,10 @@ Thumbs.db
 # Test and log output
 *.log
 coverage/
+# 临时测试素材（如手工放的样例 PDF / PPTX），不进仓库
+test-*.pdf
+test-*.pptx
+
+# 本地会话与工作记忆（WorkBuddy 生成，只属于本机，不是项目文件）
+.workbuddy/
 

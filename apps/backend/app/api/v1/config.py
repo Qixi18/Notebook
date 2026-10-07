@@ -1,15 +1,26 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.service_checks import check_provider, provider_status
+from app.core.settings_store import (
+    SettingsVerifyError,
+    SettingsWriteError,
+    apply_updates,
+    build_status,
+)
 from app.db.database import get_db
 from app.db.models import ProviderCall
 from app.parsers.ocr import status as ocr_status
-from app.schemas.api import ProviderCallRead
+from app.schemas.api import (
+    ProviderCallRead,
+    SettingsStatus,
+    SettingsUpdate,
+    SettingsUpdateResponse,
+)
 
 router = APIRouter()
 
@@ -17,6 +28,32 @@ router = APIRouter()
 @router.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "notebook-backend"}
+
+
+@router.get("/settings", response_model=SettingsStatus)
+def get_settings() -> SettingsStatus:
+    return SettingsStatus.model_validate(build_status())
+
+
+@router.patch("/settings", response_model=SettingsUpdateResponse)
+def update_settings(
+    payload: SettingsUpdate,
+    x_notebook_settings_token: str | None = Header(default=None),
+) -> SettingsUpdateResponse:
+    try:
+        outcome = apply_updates(payload.model_dump(exclude_none=True), x_notebook_settings_token)
+    except SettingsVerifyError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SettingsWriteError as exc:
+        detail = str(exc)
+        status = 403 if "口令" in detail or "密钥写入" in detail else 400
+        raise HTTPException(status_code=status, detail=detail) from exc
+    return SettingsUpdateResponse(
+        updated=outcome.updated,
+        backup_path=outcome.backup_path,
+        status=SettingsStatus.model_validate(build_status()),
+        warnings=outcome.warnings,
+    )
 
 
 

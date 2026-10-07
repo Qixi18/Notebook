@@ -13,6 +13,7 @@ import type {
 import { AssistantDock } from './AssistantDock'
 import { ConfirmDialog } from './ConfirmDialog'
 import { CourseSwitcher } from './CourseSwitcher'
+import { SettingsPanel } from '../SettingsPanel'
 
 export type Feature = 'notes' | 'materials' | 'assistant'
 
@@ -114,6 +115,7 @@ export function AppLayout() {
   const isCoursesPage = location.pathname === '/courses' || /^\/courses\/[^/]+$/.test(location.pathname)
   const isNotesLibrary = location.pathname === '/notes' || location.pathname.startsWith('/courses/') && location.pathname.includes('/notes/')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('notebuddy.sidebar-collapsed') === 'true')
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const blocker = useBlocker(({ currentLocation, nextLocation }) => noteDirty && currentLocation.pathname !== nextLocation.pathname)
 
   useEffect(() => {
@@ -194,6 +196,7 @@ export function AppLayout() {
         </svg>}
 
         <div className="sidebar-footer">
+          <button className="sidebar-settings-button" type="button" onClick={() => setSettingsOpen(true)} aria-label="打开设置">⚙ 设置</button>
           <span className="local-status-dot" />本地学习空间 · 数据保存在本机
         </div>
       </aside>
@@ -208,6 +211,7 @@ export function AppLayout() {
         <Outlet />
       </main>
       {showAssistantDock && <AssistantDock course={course} courseId={courseId} courses={courses} messages={messages} question={question} setQuestion={setQuestion} askQuestion={askQuestion} assistantBusy={assistantBusy} />}
+      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
       {blocker.state === 'blocked' && <ConfirmDialog
         eyebrow="未保存的笔记"
         title="离开正在编辑的笔记？"

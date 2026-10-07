@@ -18,8 +18,14 @@ def _resolve_data_dir() -> Path:
     return configured_path.resolve()
 
 
-@dataclass(frozen=True)
+@dataclass
 class Settings:
+    """运行时可写的配置对象。
+
+    注意：`data_dir` 与 `allowed_extensions` 视为结构约束，不通过设置接口修改；
+    其余字段可由 `app.core.settings_store` 在写入 .env 后热更新，无需重启进程。
+    """
+
     data_dir: Path
     max_upload_bytes: int
     max_pages: int

@@ -10,6 +10,10 @@ class CourseCreate(BaseModel):
     description: str | None = Field(default=None, max_length=2000)
 
 
+class CourseUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
 
 class CourseRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)

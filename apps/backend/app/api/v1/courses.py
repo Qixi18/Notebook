@@ -12,6 +12,7 @@ from app.db.models import (
 from app.schemas.api import (
     CourseCreate,
     CourseRead,
+    CourseUpdate,
     DeletionPreview,
 )
 from app.services.deletion import (
@@ -37,6 +38,18 @@ def create_course(payload: CourseCreate, db: Session = Depends(get_db)) -> Cours
 def list_courses(db: Session = Depends(get_db)) -> list[Course]:
     return list(db.scalars(select(Course).where(Course.deleted_at.is_(None)).order_by(Course.created_at.desc())).all())
 
+
+
+@router.patch("/courses/{course_id}", response_model=CourseRead)
+def rename_course(course_id: str, payload: CourseUpdate, db: Session = Depends(get_db)) -> Course:
+    course = ensure_course(db, course_id)
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="课程名称不能为空")
+    course.name = name
+    db.commit()
+    db.refresh(course)
+    return course
 
 
 @router.get("/courses/deleted", response_model=list[CourseRead])

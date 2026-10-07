@@ -19,7 +19,7 @@ from app.schemas.conversations import (
     ConversationRead,
     MessageEvidenceRead,
 )
-from app.schemas.courses import CourseCreate, CourseRead, DeletionPreview
+from app.schemas.courses import CourseCreate, CourseRead, CourseUpdate, DeletionPreview
 from app.schemas.coverage import CoverageLocation, CoverageRead
 from app.schemas.feedback import FeedbackCreate, FeedbackRead, FeedbackUpdate
 from app.schemas.jobs import JobRead
@@ -43,6 +43,7 @@ from app.schemas.materials import (
 from app.schemas.notes import NoteRead, NoteRevisionRead, NoteUpdate
 from app.schemas.proposals import KnowledgeProposalRead, NoteSuggestionRead, ProposalReview
 from app.schemas.provider import ProviderCallRead
+from app.schemas.settings import SettingsStatus, SettingsUpdate, SettingsUpdateResponse
 from app.schemas.terms import TermExplanationRequest, TermExplanationResponse, TermExplanationSource
 
 __all__ = [
@@ -60,6 +61,7 @@ __all__ = [
     'ConversationRead',
     'CourseCreate',
     'CourseRead',
+    'CourseUpdate',
     'CoverageLocation',
     'CoverageRead',
     'DeletionPreview',
@@ -85,6 +87,9 @@ __all__ = [
     'ProposalReview',
     'ProviderCallRead',
     'RestoreRequest',
+    'SettingsStatus',
+    'SettingsUpdate',
+    'SettingsUpdateResponse',
     'SourceRefRead',
     'TermExplanationRequest',
     'TermExplanationResponse',

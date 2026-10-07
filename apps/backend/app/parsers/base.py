@@ -21,6 +21,8 @@ class ParsedBlock:
     extraction_method: str = "native_text"
     confidence: float | None = 1.0
     warning: str | None = None
+    top: int | None = None
+    height: int | None = None
 
 
 @dataclass(frozen=True)

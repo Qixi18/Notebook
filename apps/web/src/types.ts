@@ -342,3 +342,18 @@ export type BackupPreview = {
   conflicts: string[]
   errors: string[]
 }
+
+export type SettingsStatus = {
+  deepseek: { configured: boolean; masked_key: string | null; base_url: string | null; model: string | null; timeout_seconds: number | null }
+  embedding: { configured: boolean; masked_key: string | null; base_url: string | null; model: string | null; timeout_seconds: number | null }
+  storage: { data_dir: string; database: string; max_upload_mb: number }
+  limits: { allowed_extensions: string[]; editable_keys: string[]; secret_write_enabled: boolean; token_required: boolean }
+  source: { env_path: string; env_exists: boolean; override_keys: string[] }
+}
+
+export type SettingsUpdateResponse = {
+  updated: string[]
+  backup_path: string | null
+  status: SettingsStatus
+  warnings: string[]
+}

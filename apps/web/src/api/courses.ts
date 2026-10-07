@@ -11,4 +11,7 @@ export const courseApi = {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, description: description || null }),
   }),
+  renameCourse: (id: string, name: string) => request<Course>(`/api/v1/courses/${id}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+  }),
 }
