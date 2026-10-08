@@ -33,6 +33,8 @@ Thumbs.db
 # Test and log output
 *.log
 coverage/
+.playwright-cli/
+output/playwright/
 # 临时测试素材（如手工放的样例 PDF / PPTX），不进仓库
 test-*.pdf
 test-*.pptx

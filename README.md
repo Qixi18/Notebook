@@ -14,6 +14,8 @@ Tao:
 
 ## 当前开发状态
 
+2026-10-08 课程笔记本方案 A：笔记书架按课程显示，每讲一个章节；支持章节/整本阅读、目录重排、小节独立编辑与来源历史。同名知识点在各讲保留不同正文，叶子和旧笔记链接定位到对应小节。旧库由 Alembic 自动迁移，跨讲共享旧笔记进入历史整理。详见 [交接与验收](docs/handoffs/2026-10-08-course-notebook.md)、[接口](docs/api.md) 和 [开源工具复用](docs/open-source-tools.md)。真实课件与外部 AI 质量仍需正式验收。
+
 仓库已经加入初版本地 Web Demo 骨架：
 
 - `apps/web`：React + TypeScript + Vite 三栏学习工作区
