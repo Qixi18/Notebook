@@ -1,4 +1,3 @@
-import { assistantApi } from './api/assistant'
 import { configApi } from './api/config'
 import { courseApi } from './api/courses'
 import { knowledgeApi } from './api/knowledge'
@@ -10,14 +9,13 @@ import { backupApi } from './api/backup'
 import { termsApi } from './api/terms'
 
 export { ApiError } from './api/http'
-export type { Capabilities, OCRStatus, ProviderCall, ProviderStatus } from './api/config'
+export type { Capabilities, ConnectivityTestPayload, OCRStatus, ProviderCall, ProviderStatus } from './api/config'
 
 export const api = {
   ...courseApi,
   ...materialApi,
   ...noteApi,
   ...knowledgeApi,
-  ...assistantApi,
   ...configApi,
   ...conversationApi,
   ...feedbackApi,

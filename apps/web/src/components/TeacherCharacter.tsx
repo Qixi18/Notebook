@@ -1,5 +1,7 @@
 import { useId } from 'react'
 
+import { teacherPersonaMeta } from '../features/persona/personas'
+
 export type TeacherStatus = 'idle' | 'thinking' | 'explaining' | 'error'
 export type TeacherCharacterId = 'elf' | 'doubao' | 'feiyu'
 
@@ -10,19 +12,18 @@ const statusLabels: Record<TeacherStatus, string> = {
   error: '暂时遇到问题',
 }
 
-/* 每个人物的待机名牌文案(思考/讲解/报错等状态共用状态文案) */
-const characterLabels: Record<TeacherCharacterId, string> = {
-  elf: 'AI 教师',
-  doubao: '豆包助手',
-  feiyu: '肥鱼',
-}
-
+/* 四态静态立绘目前只有莉艾尔一套 */
 const statusAssets: Record<TeacherStatus, string> = {
   idle: '/assets/teacher/teacher-idle.png',
   thinking: '/assets/teacher/teacher-thinking.png',
   explaining: '/assets/teacher/teacher-explaining.png',
   error: '/assets/teacher/teacher-error.png',
 }
+
+/* 莉艾尔有四态静态立绘；豆包与肥鱼是精灵图交付，没有静态立绘。
+   非首页(答疑页头像、悬浮答疑坞)改用待机雪碧图的首帧，
+   这样切换老师时画面跟着换，而不再是三个人共用莉艾尔的脸。 */
+const STATUS_ART_CHARACTER: TeacherCharacterId = 'elf'
 
 /* 特效坐标全部使用立绘源图像素(1024×1536),与 SVG viewBox 一一对应,
    因此舞台层无论以哪种断点尺寸显示,特效都能对准立绘的同一位置 */
@@ -62,20 +63,24 @@ export function TeacherCharacter({ status = 'idle', compact = false, animated = 
 }) {
   const rawId = useId()
   const gradientId = `tfx-glow-${rawId.replace(/[^a-zA-Z0-9]/g, '')}`
-  const useSprite = animated && status === 'idle'
-  const idleLabel = characterLabels[character]
+  /* animated 表示"这一处用连续帧动画呈现"：首页待机与侧边答疑坞都走动画雪碧图，
+     因此没有状态帧的老师(豆包/肥鱼)也不会退化成静帧；只有出错态才回落到静态立绘 */
+  const useAnimatedSprite = animated && status !== 'error'
+  const useStaticSprite = !useAnimatedSprite && character !== STATUS_ART_CHARACTER
+  const useSprite = useAnimatedSprite || useStaticSprite
+  const idleLabel = teacherPersonaMeta(character).name
 
   return (
     <div className={`teacher-character teacher-character-${status}${compact ? ' teacher-character-compact' : ''}`} role="img" aria-label={`NoteBuddy AI 教师：${status === 'idle' ? idleLabel : statusLabels[status]}`}>
       <div className="teacher-character-halo" aria-hidden="true" />
       <div className="teacher-character-stage" aria-hidden="true">
         {useSprite ? (
-          <div className={`teacher-character-sprite teacher-character-sprite-${character}`} />
+          <div className={`teacher-character-sprite teacher-character-sprite-${character}${useStaticSprite ? ' teacher-character-sprite-static' : ''}`} />
         ) : (
           <img className="teacher-character-image" src={statusAssets[status]} alt="" loading="lazy" decoding="async" />
         )}
         <svg className="teacher-character-fx" viewBox="0 0 1024 1536" preserveAspectRatio="xMidYMax meet" focusable="false">
-          {status !== 'error' && !useSprite &&
+          {status !== 'error' && !useAnimatedSprite &&
             sparkleSeeds.map((seed, index) => (
               <path
                 key={index}

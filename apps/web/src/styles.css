@@ -1249,9 +1249,10 @@ input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, select:f
 
 /* Accepted NoteBuddy shell: a working navigation rail, central workspace and course assistant. */
 .app-shell { transition: grid-template-columns .2s ease; }
-.app-shell-with-assistant { grid-template-columns: 236px minmax(0,1fr) 278px; }
+/* 第三列（答疑坞）加宽到 300px：字号调大后需要更宽的行长，否则每行只放得下十几个字 */
+.app-shell-with-assistant { grid-template-columns: 236px minmax(0,1fr) 300px; }
 .app-shell-sidebar-collapsed { grid-template-columns: 76px minmax(0,1fr); }
-.app-shell-sidebar-collapsed.app-shell-with-assistant { grid-template-columns: 76px minmax(0,1fr) 278px; }
+.app-shell-sidebar-collapsed.app-shell-with-assistant { grid-template-columns: 76px minmax(0,1fr) 300px; }
 .app-sidebar { transition: padding .2s ease; }
 .brand-mark svg { width: 25px; fill: #8aaf78; stroke: #e6f0df; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .sidebar-collapse-toggle { display: flex; min-height: 34px; align-items: center; gap: 8px; border: 1px solid #e5e5d9; border-radius: 9px; margin: 15px 1px 12px; padding: 5px 9px; color: #727d70; background: transparent; font-size: 11px; text-align: left; }
@@ -1277,31 +1278,59 @@ input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, select:f
 .assistant-dock-heading { display: flex; align-items: center; gap: 10px; }
 .assistant-dock-mark { display: grid; width: 30px; height: 30px; flex: none; place-items: center; border-radius: 10px; color: #557858; background: #edf2e8; }
 .assistant-dock-heading strong, .assistant-dock-heading small { display: block; }
-.assistant-dock-heading strong { color: #344739; font-size: 13px; }
-.assistant-dock-heading small { overflow: hidden; max-width: 190px; margin-top: 4px; color: #879082; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.assistant-dock-teacher { position: relative; display: grid; height: 158px; flex: none; place-items: center; overflow: hidden; border-radius: 17px; margin: 15px 0; background: linear-gradient(180deg,#f3f1f5,#fff 82%); }
-.assistant-dock-teacher .teacher-character { width: 130px; height: 152px; }
-.assistant-dock-teacher .teacher-character-halo { top: 14px; width: 112px; height: 112px; border: 0; background: radial-gradient(circle,#fff,#eef0f2 78%,transparent); box-shadow: none; }
+.assistant-dock-heading strong { color: #344739; font-size: 14px; }
+.assistant-dock-heading small { overflow: hidden; max-width: 210px; margin-top: 4px; color: #879082; font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+/* 侧边答疑坞立绘：舞台高度由 --dock-art-h 统一派生，角色宽高与光晕随之等比缩放。
+   容器高度 = 舞台 + 名牌空间，立绘因此能真正长到舞台高度（过去被 48px 头像的
+   .teacher-character-compact 舞台高度覆盖，只画了 67px，缩在框里显得很小）。 */
+.assistant-dock-teacher { --dock-art-h: clamp(150px, 26vh, 208px); position: relative; display: grid; height: calc(var(--dock-art-h) + 38px); flex: none; place-items: center; overflow: hidden; border-radius: 17px; margin: 15px 0; background: linear-gradient(180deg,#f3f1f5,#fff 82%); }
+.assistant-dock-teacher .teacher-character { width: calc(var(--dock-art-h) * 0.84); height: 100%; }
+.assistant-dock-teacher .teacher-character-halo { top: calc(var(--dock-art-h) * 0.09); width: calc(var(--dock-art-h) * 0.78); height: calc(var(--dock-art-h) * 0.78); border: 0; background: radial-gradient(circle,#fff,#eef0f2 78%,transparent); box-shadow: none; }
 .assistant-dock-teacher .teacher-character-halo::after { display: none; }
-.assistant-dock-teacher .teacher-character-stage { height: 145px; }
+.assistant-dock-teacher .teacher-character-stage { align-self: start; height: var(--dock-art-h); margin-top: 7px; }
+.assistant-dock-teacher .teacher-character-sprite { height: var(--dock-art-h); }
+.assistant-dock-teacher .teacher-character-fx { display: none; }
 .assistant-dock-teacher .teacher-character-image { filter: none; }
-.assistant-dock-teacher .teacher-character-label { bottom: 2px; border-color: #e6e8e0; color: #6a7e69; background: rgba(255,255,255,.94); font-size: 10px; }
+.assistant-dock-teacher .teacher-character-label { bottom: 2px; border-color: #e6e8e0; color: #6a7e69; background: rgba(255,255,255,.94); font-size: 11px; }
 .assistant-dock-intro { display: grid; gap: 5px; margin-bottom: 10px; }
-.assistant-dock-intro strong { color: #415643; font-size: 12px; }
-.assistant-dock-intro small { color: #868d80; font-size: 10px; line-height: 1.5; }
-.assistant-dock-messages { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 8px; overflow-y: auto; padding: 2px 1px 10px; overscroll-behavior: contain; }
-.assistant-dock-message { border-radius: 11px; padding: 9px 10px; color: #596456; background: #f0f2eb; }
+.assistant-dock-intro strong { color: #415643; font-size: 13px; }
+.assistant-dock-intro small { color: #868d80; font-size: 11.5px; line-height: 1.55; }
+.assistant-dock-messages { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 9px; overflow-y: auto; padding: 2px 1px 10px; overscroll-behavior: contain; }
+.assistant-dock-message { min-width: 0; border-radius: 11px; padding: 10px 12px; color: #4f5b4d; background: #f0f2eb; }
 .assistant-dock-message-user { align-self: flex-end; max-width: 94%; color: #526850; background: #e6eee1; }
-.assistant-dock-message small { display: block; margin-bottom: 4px; color: #889083; font-size: 9px; }
-.assistant-dock-message p { display: -webkit-box; overflow: hidden; font-size: 10px; line-height: 1.6; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
-.assistant-dock-message > span { display: block; margin-top: 5px; color: #798872; font-size: 9px; }
+.assistant-dock-message small { display: block; margin-bottom: 5px; color: #889083; font-size: 10.5px; }
+/* 完整展示回复：不再 -webkit-line-clamp 截断，超长内容交给 .assistant-dock-messages 滚动 */
+.assistant-dock-message p { font-size: 12.5px; line-height: 1.68; overflow-wrap: anywhere; white-space: pre-wrap; }
+/* 坞内 Markdown：与答疑页同一条渲染管线，但间距/字号按 300px 窄栏收紧 */
+.assistant-dock-answer { color: #4f5b4d; font-size: 12.5px; line-height: 1.68; }
+.assistant-dock-answer > :first-child { margin-top: 0; }
+.assistant-dock-answer > :last-child { margin-bottom: 0; }
+.assistant-dock-answer h1, .assistant-dock-answer h2, .assistant-dock-answer h3, .assistant-dock-answer h4 { margin: .85em 0 .35em; color: #344b38; font-size: 13px; font-weight: 700; }
+.assistant-dock-answer p { margin: .5em 0; }
+.assistant-dock-answer ul, .assistant-dock-answer ol { margin: .45em 0; padding-left: 1.35em; }
+.assistant-dock-answer ul { list-style: disc; }
+.assistant-dock-answer ol { list-style: decimal; }
+.assistant-dock-answer li { margin: .25em 0; }
+.assistant-dock-answer li::marker { color: #8aa084; }
+.assistant-dock-answer strong { color: #2f4634; font-weight: 700; }
+.assistant-dock-answer blockquote { border-left: 3px solid #a8bea2; margin: .6em 0; padding-left: 10px; color: #657564; }
+.assistant-dock-answer code { border-radius: 4px; padding: 1px 4px; background: #e9ece2; font-size: .92em; }
+.assistant-dock-answer pre { overflow: auto; border-radius: 8px; margin: .55em 0; padding: 9px 10px; background: #e9ece2; }
+.assistant-dock-answer pre code { padding: 0; background: transparent; }
+.assistant-dock-answer hr { border: 0; border-top: 1px solid #e2e5dc; margin: .8em 0; }
+.assistant-dock-answer a { color: #4e7a5a; text-decoration: underline; }
+.assistant-dock-answer table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.assistant-dock-answer th, .assistant-dock-answer td { border: 1px solid #e2e5dc; padding: 4px 6px; text-align: left; }
+.assistant-dock-answer .katex { font-size: 1.02em; }
+.assistant-dock-answer .katex-display { overflow-x: auto; overflow-y: hidden; margin: .6em 0; }
+.assistant-dock-message > span { display: block; margin-top: 6px; color: #798872; font-size: 10.5px; }
 .assistant-dock-form { flex: none; border-top: 1px solid #e6e6dc; padding-top: 10px; }
-.assistant-dock-form textarea { width: 100%; min-height: 54px; resize: vertical; border: 1px solid #e2e5dc; border-radius: 10px; padding: 9px; color: #405143; background: #fffefa; font-size: 11px; line-height: 1.5; }
-.assistant-dock-form > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 7px; }
-.assistant-dock-form a { color: #6c8067; font-size: 10px; }
-.assistant-dock-form button { min-height: 34px; border: 0; border-radius: 9px; padding: 0 13px; color: white; background: #507958; font-size: 11px; }
+.assistant-dock-form textarea { width: 100%; min-height: 62px; resize: vertical; border: 1px solid #e2e5dc; border-radius: 10px; padding: 9px 10px; color: #405143; background: #fffefa; font-size: 12.5px; line-height: 1.55; }
+.assistant-dock-form > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.assistant-dock-form a { color: #6c8067; font-size: 11.5px; }
+.assistant-dock-form button { min-height: 38px; border: 0; border-radius: 9px; padding: 0 14px; color: white; background: #507958; font-size: 12.5px; }
 .assistant-dock-form button:disabled { opacity: .55; }
-.assistant-dock-empty { margin-top: auto; margin-bottom: auto; color: #7f897d; font-size: 12px; line-height: 1.7; }
+.assistant-dock-empty { margin-top: auto; margin-bottom: auto; color: #7f897d; font-size: 13px; line-height: 1.7; }
 .assistant-dock-empty .text-button { display: inline-flex; margin-top: 10px; }
 
 /* The notes index is a searchable library; each note is opened as a separate reader. */
@@ -1398,7 +1427,15 @@ input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, select:f
 .course-knowledge-structure > .knowledge-tree-layout { margin-top: 0; }
 
 /* Keep the knowledge assistant useful without repeating it on its own route. */
-.assistant-page .assistant-workspace { min-height: min(76vh,820px); }
+/* 答疑页：工作区定高成「聊天面板」——消息区在内部滚动、输入框常驻底部。
+   此前只给 min-height，工作区会随消息无限长高，消息区因此永远不溢出、滚不动；
+   而它又是 overflow-y:auto 的滚动容器，滚轮落在它上面就被吃掉（外层还叠了
+   .assistant-workspace 的 overflow:hidden 与它的 overscroll-behavior:contain），
+   于是鼠标停在占页面九成面积的对话区时，整页也滚不动。
+   定高后消息区真正成为滚动区，滚轮恢复正常，且整页无需滚动。 */
+.assistant-page .assistant-workspace { height: clamp(460px, calc(100vh - 214px), 820px); height: clamp(460px, calc(100dvh - 214px), 820px); min-height: 460px; }
+/* flex 子项默认 min-height:auto（= 内容高度），不置 0 时无法收缩成滚动区 */
+.assistant-page .assistant-conversation { min-height: 0; }
 .assistant-context-bar { display: grid; grid-template-columns: 48px minmax(0,1fr) auto; align-items: center; gap: 12px; }
 .assistant-context-bar > div { min-width: 0; }
 .assistant-options { position: relative; align-self: center; }
@@ -1504,8 +1541,8 @@ input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, select:f
 }
 
 @media (max-width: 1150px) {
-  .app-shell-with-assistant { grid-template-columns: 210px minmax(0,1fr) 238px; }
-  .app-shell-sidebar-collapsed.app-shell-with-assistant { grid-template-columns: 76px minmax(0,1fr) 238px; }
+  .app-shell-with-assistant { grid-template-columns: 210px minmax(0,1fr) 262px; }
+  .app-shell-sidebar-collapsed.app-shell-with-assistant { grid-template-columns: 76px minmax(0,1fr) 262px; }
   .assistant-dock { padding-inline: 12px; }
   .notes-bookshelf { grid-template-columns: repeat(auto-fill,minmax(170px,1fr)); gap: 14px; }
   .note-book, .book-create-tile { min-height: 225px; }
@@ -1601,6 +1638,10 @@ input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, select:f
 .field-existing { margin-left: 7px; color: #a09cab; font-size: 10px; font-style: normal; font-weight: 600; }
 .settings-details code { border-radius: 5px; padding: 1px 5px; color: #5c4fd0; background: #f1efff; font-family: ui-monospace, Consolas, monospace; font-size: 10px; }
 .field input[type="password"] { letter-spacing: .14em; }
+.actions-row { display: flex; align-items: center; gap: 12px; margin-top: 2px; }
+.settings-section .actions-row .secondary-button { min-height: 32px; padding: 0 12px; font-size: 11px; }
+.actions-row .test-bad { color: #c04a4a; }
+.actions-row .actions-hint { color: #a09cab; font-size: 10px; line-height: 1.5; }
 
 /* ---------- 课程右键菜单 ---------- */
 .context-menu { position: fixed; z-index: 80; min-width: 158px; border: 1px solid #e2dff0; border-radius: 13px; padding: 6px; background: white; box-shadow: 0 14px 34px rgba(52, 44, 110, .18); animation: menu-in .13s ease; }
@@ -1674,8 +1715,9 @@ input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, select:f
    轨道必须 minmax(0,1fr)——auto 轨道会被 aspect-ratio 撑宽，max-width 百分比在循环尺寸下失效 */
 .home-teacher-frame .teacher-character { grid-template-columns: minmax(0, 1fr); }
 .home-teacher-frame .teacher-character-stage { max-width: 100%; }
-/* 雪碧图自带角色动画，关闭舞台呼吸避免动作叠加 */
-.home-teacher-frame .teacher-character-idle .teacher-character-stage { animation: none; }
+/* 雪碧图自带角色动画，关闭舞台呼吸避免动作叠加（侧边答疑坞同样用雪碧图，故同规则） */
+.home-teacher-frame .teacher-character-idle .teacher-character-stage,
+.assistant-dock-teacher .teacher-character-idle .teacher-character-stage { animation: none; }
 
 @keyframes teacher-idle-frames {
   0.0000% { background-position: 0.0000% 0.0000%; }
@@ -1790,4 +1832,33 @@ input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, select:f
   92.5000% { background-position: 77.7778% 100.0000%; }
   95.0000% { background-position: 88.8889% 100.0000%; }
   97.5000% { background-position: 100.0000% 100.0000%; }
+}
+
+/* ===== 非首页静态形象:豆包/肥鱼复用同一张待机雪碧图的首帧 =====
+   - 停掉逐帧动画,只显示左上角第一帧
+   - 按舞台高度定尺寸(帧内容纵向满幅,与 teacher-*.png 一致),角色大小与莉艾尔对齐,
+     .teacher-character-fx 的 1024×1536 坐标因此仍然对得上
+   - 现在只有首页会用 animated 精灵图,所以这些规则不会影响首页 */
+.teacher-character-sprite-static {
+  top: auto;
+  bottom: 0;
+  left: 50%;
+  right: auto;
+  width: auto;
+  height: 100%;
+  margin-inline: 0;
+  transform: translateX(-50%);
+  animation: none;
+  background-position: 0 0;
+}
+
+@media (max-width: 720px) {
+  /* 窄屏下侧栏改为顶部横条（约 126px）、标题块堆叠（约 134–155px），
+     且 .app-main 仍是 min-height:100vh，故按实测把余量放到 336px，
+     以保证输入框始终停在首屏内。 */
+  .assistant-page .assistant-workspace { height: clamp(340px, calc(100vh - 336px), 820px); height: clamp(340px, calc(100dvh - 336px), 820px); min-height: 340px; }
+  /* 窄屏展开「答疑设置」时，设置区本身就有 370px 以上，定高面板会把输入框挤出并被裁掉。
+     此时让面板恢复随内容增长，并把消息区封顶，保证输入框始终可见、页面不至于被撑成几千像素。 */
+  .assistant-page .assistant-workspace:has(.assistant-options[open]) { height: auto; min-height: 0; }
+  .assistant-page .assistant-workspace:has(.assistant-options[open]) .assistant-conversation { max-height: 45vh; }
 }
