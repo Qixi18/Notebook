@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
 import remarkMath from 'remark-math'
@@ -35,6 +35,7 @@ export function NoteSectionReader({ noteId }: { noteId: string }) {
     courseId,
     courseContentLoading,
     notes,
+    upsertNotes,
     selectedNote,
     setSelectedNoteId,
     noteDraft,
@@ -48,8 +49,7 @@ export function NoteSectionReader({ noteId }: { noteId: string }) {
     error,
     setError,
     materials,
-    setSelectedMaterialId,
-    setSelectedPageNumber,
+    openMaterialSource,
   } = useWorkspace()
   const navigate = useNavigate()
   const { courseId: routeCourseId = '' } = useParams()
@@ -62,6 +62,13 @@ export function NoteSectionReader({ noteId }: { noteId: string }) {
   const [pendingNoteAction, setPendingNoteAction] = useState<{ kind: 'revision'; revision: NoteRevision }>()
   const [webSources, setWebSources] = useState<import('../types').WebSource[]>([])
   const [suggestions, setSuggestions] = useState<Array<{ id: string; proposed_markdown: string; impact: string; status: string }>>([])
+  const readerNoteId = useRef(noteId)
+  readerNoteId.current = noteId
+  const readerActive = useRef(true)
+  useEffect(() => {
+    readerActive.current = true
+    return () => { readerActive.current = false }
+  }, [])
 
   useEffect(() => {
     if (!noteId || courseContentLoading || !notes.some((note) => note.id === noteId) || selectedNote?.id === noteId) return
@@ -95,19 +102,27 @@ export function NoteSectionReader({ noteId }: { noteId: string }) {
 
   async function reviewSuggestion(suggestionId: string, decision: 'confirm' | 'reject') {
     if (!selectedNote || noteDirty || noteSaving) return
+    const requestedNoteId = selectedNote.id
     try {
-    const updated = await api.reviewSuggestion(selectedNote.id, suggestionId, decision)
-    setSuggestions((items) => items.map((item) => item.id === suggestionId ? { ...item, status: decision === 'confirm' ? 'accepted' : 'rejected' } : item))
-    if (decision === 'confirm') {
-      setSelectedNoteId(updated.id)
-      await reloadNote()
+      const updated = await api.reviewSuggestion(requestedNoteId, suggestionId, decision)
+      if (!readerActive.current || readerNoteId.current !== requestedNoteId) return
+      upsertNotes([updated])
+      setSuggestions((items) => items.map((item) => item.id === suggestionId ? { ...item, status: decision === 'confirm' ? 'accepted' : 'rejected' } : item))
+    } catch (cause) {
+      if (readerActive.current && readerNoteId.current === requestedNoteId) setError(cause instanceof Error ? cause.message : '建议处理失败')
     }
-    } catch (cause) { setError(cause instanceof Error ? cause.message : '建议处理失败') }
+  }
+
+  async function reloadCurrentNote() {
+    const requestedNoteId = noteId
+    try { await reloadNote() }
+    catch (cause) {
+      if (readerActive.current && readerNoteId.current === requestedNoteId) setError(cause instanceof Error ? cause.message : '最新版本读取失败')
+    }
   }
 
   function openSource(source: NoteSourceRef) {
-    setSelectedMaterialId(source.material_id)
-    setSelectedPageNumber(source.page_number)
+    openMaterialSource(source.material_id, source.page_number)
     if (courseId) navigate(featurePath(courseId, 'materials'))
   }
 
@@ -165,7 +180,7 @@ export function NoteSectionReader({ noteId }: { noteId: string }) {
               </>
             ) : <div className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{displayedContent || '此版本没有正文内容。'}</ReactMarkdown></div>}
 
-            {error?.includes('笔记已在其他操作中更新') && <div className="note-conflict-panel" role="alert"><strong>检测到版本冲突</strong><p>可以载入最新版本重新编辑，或保留当前草稿并自行比较。载入最新版本会替换当前编辑内容。</p><button className="secondary-button" onClick={() => void reloadNote().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : '最新版本读取失败'))}>载入最新版本</button><button className="text-button" onClick={() => setError(undefined)}>保留当前草稿</button></div>}
+            {error?.includes('笔记已在其他操作中更新') && <div className="note-conflict-panel" role="alert"><strong>检测到版本冲突</strong><p>可以载入最新版本重新编辑，或保留当前草稿并自行比较。载入最新版本会替换当前编辑内容。</p><button className="secondary-button" onClick={() => void reloadCurrentNote()}>载入最新版本</button><button className="text-button" onClick={() => setError(undefined)}>保留当前草稿</button></div>}
           </article>
           <button className="note-evidence-toggle" aria-expanded={evidenceOpen} onClick={() => setEvidenceOpen((open) => !open)}>{evidenceOpen ? '收起来源与历史' : `查看来源与历史 · ${sources.length} 条来源 / ${revisions.length} 个版本`}</button>
           <aside className={`note-evidence-sidebar ${evidenceOpen ? 'note-evidence-sidebar-open' : ''}`} aria-label="笔记来源与修订历史">

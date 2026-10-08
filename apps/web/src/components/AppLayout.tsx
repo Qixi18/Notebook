@@ -40,6 +40,7 @@ export type WorkspaceContextValue = {
   pages: Page[]
   selectedPageNumber?: number
   setSelectedPageNumber: (page: number | undefined) => void
+  openMaterialSource: (materialId: string, page: number | undefined) => void
   notes: Note[]
   upsertNotes: (notes: Note[]) => void
   selectedNote?: Note

@@ -23,6 +23,12 @@ export function useWorkspaceState() {
   currentMaterialId.current = selectedMaterialId
   const [pages, setPages] = useState<Page[]>([])
   const [selectedPageNumber, setSelectedPageNumber] = useState<number>()
+  const requestedSourcePage = useRef<{ materialId: string; page: number | undefined } | undefined>(undefined)
+  const openMaterialSource = useCallback((materialId: string, page: number | undefined) => {
+    requestedSourcePage.current = currentMaterialId.current === materialId ? undefined : { materialId, page }
+    setSelectedMaterialId(materialId)
+    setSelectedPageNumber(page)
+  }, [])
   const [notes, setNotes] = useState<Note[]>([])
   const upsertNotes = useCallback((incoming: Note[]) => {
     setNotes((current) => mergeNotebookNotes(current, incoming))
@@ -65,7 +71,12 @@ export function useWorkspaceState() {
     const next = await api.listPages(id)
     if (currentMaterialId.current !== id) return
     setPages(next)
-    setSelectedPageNumber((current) => current && next.some((page) => page.page_number === current) ? current : next[0]?.page_number)
+    const target = requestedSourcePage.current?.materialId === id ? requestedSourcePage.current.page : undefined
+    setSelectedPageNumber((current) => {
+      const desired = target ?? current
+      return desired && next.some((page) => page.page_number === desired) ? desired : next[0]?.page_number
+    })
+    if (requestedSourcePage.current?.materialId === id) requestedSourcePage.current = undefined
   }, [])
 
   const refreshNotes = useCallback(async (id: string) => {
@@ -97,6 +108,7 @@ export function useWorkspaceState() {
     setSelectedMaterialId(undefined)
     setSelectedPageNumber(undefined)
     setSelectedNoteId(undefined)
+    requestedSourcePage.current = undefined
     setJob(undefined)
     setCourseContentLoading(Boolean(courseId))
 
@@ -132,7 +144,7 @@ export function useWorkspaceState() {
   useEffect(() => {
     let active = true
     setPages([])
-    setSelectedPageNumber(undefined)
+    setSelectedPageNumber(requestedSourcePage.current?.materialId === selectedMaterialId ? requestedSourcePage.current?.page : undefined)
     setJob(undefined)
     if (!selectedMaterialId) return () => { active = false }
     void refreshPages(selectedMaterialId).catch((cause: unknown) => {
@@ -231,6 +243,7 @@ export function useWorkspaceState() {
     pages,
     selectedPageNumber,
     setSelectedPageNumber,
+    openMaterialSource,
     notes,
     upsertNotes,
     selectedNote,

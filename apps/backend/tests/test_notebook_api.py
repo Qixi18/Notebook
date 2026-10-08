@@ -110,3 +110,26 @@ def test_web_sources_only_follow_the_notes_lecture(setup):
     db.commit()
     result = client.get(f"/api/v1/notes/{notes[1].id}/web-sources")
     assert [source["title"] for source in result.json()] == ["来源1"]
+
+
+def test_historical_web_sources_follow_actual_note_materials(setup):
+    from app.db.models import MaterialPage, PageBlock, SourceRef, WebSource
+    client, db, course, materials, notes, legacy, _ = setup
+    unrelated = Material(course_id=course.id, lecture_title="第三讲", original_filename="c.pptx",
+                         stored_filename="c.pptx", size_bytes=1)
+    db.add(unrelated); db.flush()
+    for i, material in enumerate([*materials, unrelated]):
+        db.add(WebSource(course_id=course.id, material_id=material.id,
+                         knowledge_node_id=notes[0].knowledge_node_id, title=f"来源{i}",
+                         url=f"https://example.org/{i}", site_name="示例", search_query="矩阵"))
+        if material in materials:
+            page = MaterialPage(material_id=material.id, page_number=1, raw_text="旧正文来源")
+            db.add(page); db.flush()
+            block = PageBlock(page_id=page.id, block_type="text", content="原文", position=0)
+            db.add(block); db.flush()
+            source = SourceRef(page_block_id=block.id, source_type="course_material", quote="原文")
+            db.add(source); db.flush()
+            legacy.source_refs.append(source)
+    db.commit()
+    result = client.get(f"/api/v1/notes/{legacy.id}/web-sources")
+    assert {source["title"] for source in result.json()} == {"来源0", "来源1"}

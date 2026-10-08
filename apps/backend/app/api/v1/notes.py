@@ -73,6 +73,9 @@ def get_note_web_sources(note_id: str, db: Session = Depends(get_db)) -> list[We
                                     WebSource.knowledge_node_id == note.knowledge_node_id)
     if note.material_id is not None:
         query = query.where(WebSource.material_id == note.material_id)
+    else:
+        material_ids = {source.page_block.page.material_id for source in note.source_refs}
+        query = query.where(WebSource.material_id.in_(material_ids))
     return list(db.scalars(query.order_by(WebSource.retrieved_at.desc())).all())
 
 

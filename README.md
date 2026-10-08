@@ -40,6 +40,8 @@ Tao:
 
 首次使用前分别在 `apps/backend` 执行 `uv sync`，在 `apps/web` 执行 `npm install`。手动分终端启动时，除 API 和前端外还必须在 `apps/backend` 运行 `uv run python -m app.workers.runner`，否则上传后的任务会保持等待处理。
 
+Web 开发与测试使用 Node.js 22.12 或以上版本。在 `apps/web` 执行 `npm test` 运行导航与 React 交互回归，执行 `npm run build` 检查类型并构建。测试工具只属于开发依赖。
+
 原有分终端方式如下，但需同时启动上述执行器：
 
 ```powershell

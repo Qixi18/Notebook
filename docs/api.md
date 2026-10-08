@@ -12,7 +12,9 @@
 
 上传、移除及恢复资料均递增目录版本。NoteRead 增加 `material_id`（历史笔记可空）、`section_key`、`section_order`；原笔记 ID、保存版本号、历史与来源接口保持兼容。知识图增加 `occurrences`，每项 `id=note_id`，同时包含概念 ID、资料 ID、稳定小节键、顺序和标题；同概念可以对应多个讲次小节。本讲笔记的网络来源限制在其 material_id。
 
-Web 定位：`/courses/:courseId/notebook?chapter=<materialId>&section=<noteId>`；历史小节用 `chapter=history`，整本模式加 `mode=book`。旧 `/courses/:courseId/notes/:noteId` 按原 ID 转入对应位置。正文保存仍使用乐观版本号，AI 重解析变化只创建建议。
+历史整理的网络来源按笔记实际课件来源中的资料集合筛选；无法确定资料范围时返回空列表，不能返回概念在所有讲次中的来源。
+
+Web 定位：`/courses/:courseId/notebook?chapter=<materialId>&section=<noteId>`；历史小节用 `chapter=history`，整本模式加 `mode=book`（包含所有历史整理正文）。旧 `/courses/:courseId/notes/:noteId` 按原 ID 转入对应位置。正文保存仍使用乐观版本号，AI 重解析变化只创建建议。
 
 现有 `/api/v1` 地址保持不变。路由按 `courses.py`、`materials.py`、`jobs.py`、`knowledge.py`、`notes.py`、`assistant.py`、`config.py` 拆分，`routes.py` 负责汇总。输入和输出模型在 `app/schemas/` 按域声明，`app/schemas/api.py` 保留兼容导出。
 

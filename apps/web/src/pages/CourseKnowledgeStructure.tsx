@@ -10,7 +10,7 @@ import { notebookPath } from '../features/notebook/navigation'
 
 export function CourseKnowledgeStructure() {
   const { courseId = '' } = useParams()
-  const { course, courseContentLoading, graph, notes, materials, setSelectedMaterialId, setSelectedPageNumber } = useWorkspace()
+  const { course, courseContentLoading, graph, notes, materials, openMaterialSource } = useWorkspace()
   const [query, setQuery] = useState('')
   const [selectedNodeId, setSelectedNodeId] = useState<string>()
   const [selectedOccurrenceId, setSelectedOccurrenceId] = useState<string>()
@@ -41,8 +41,9 @@ export function CourseKnowledgeStructure() {
   }, [materials])
   const selectedNode = visibleNodes.find((node) => node.id === selectedNodeId) ?? visibleNodes[0]
   const conceptOccurrences = (graph.occurrences ?? []).filter((s) => s.knowledge_node_id === selectedNode?.id)
-  const selectedNote = notes.find((item) => item.id === selectedOccurrenceId && item.knowledge_node_id === selectedNode?.id)
-    ?? notes.find((item) => item.id === conceptOccurrences[0]?.id)
+  const filteredOccurrences = conceptOccurrences.filter((s) => lectureFilter === 'all' || s.material_id === lectureFilter)
+  const selectedOccurrence = filteredOccurrences.find((s) => s.id === selectedOccurrenceId) ?? filteredOccurrences[0]
+  const selectedNote = notes.find((item) => item.id === selectedOccurrence?.id)
   const relatedEdges = selectedNode ? graph.edges.filter((edge) => edge.source_node_id === selectedNode.id || edge.target_node_id === selectedNode.id) : []
   const selectedChanges = selectedNode ? changes.filter((change) => change.node_id === selectedNode.id) : []
   const coreCutoff = 2
@@ -83,8 +84,7 @@ export function CourseKnowledgeStructure() {
   }
 
   function openSource(source: NoteSourceRef) {
-    setSelectedMaterialId(source.material_id)
-    setSelectedPageNumber(source.page_number)
+    openMaterialSource(source.material_id, source.page_number)
     navigate(featurePath(courseId, 'materials'))
   }
 
@@ -112,6 +112,7 @@ export function CourseKnowledgeStructure() {
               <div className={`knowledge-node-list ${view === 'relations' ? 'knowledge-node-list-relations' : 'knowledge-node-list-tree'}`} role={view === 'tree' ? 'tree' : 'list'} aria-label="课程知识结构" style={{ '--tree-zoom': zoom } as React.CSSProperties}>
                 {view === 'tree' && <div className="tree-root" role="treeitem" aria-level={1}><span className="tree-root-icon">⌂</span><strong>{course?.name ?? '当前课程'}</strong><small>{visibleNodes.length} 个知识点</small></div>}
                 {view === 'tree' ? topicGroups.map((topic) => {
+                  if (lectureFilter !== 'all' && topic.id !== lectureFilter) return null
                   const lectureNodes = (graph.occurrences ?? []).filter((s) => topic.materialIds.includes(s.material_id ?? '') && visibleNodes.some((node) => node.id === s.knowledge_node_id))
                   if (!lectureNodes.length) return null
                   return <section className="tree-lecture-group" role="group" key={topic.id}>
