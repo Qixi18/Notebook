@@ -4,6 +4,7 @@ import { courseApi } from './api/courses'
 import { knowledgeApi } from './api/knowledge'
 import { materialApi } from './api/materials'
 import { noteApi } from './api/notes'
+import { notebookApi } from './api/notebook'
 import { conversationApi } from './api/conversations'
 import { feedbackApi } from './api/feedback'
 import { backupApi } from './api/backup'
@@ -16,6 +17,7 @@ export const api = {
   ...courseApi,
   ...materialApi,
   ...noteApi,
+  ...notebookApi,
   ...knowledgeApi,
   ...assistantApi,
   ...configApi,

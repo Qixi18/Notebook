@@ -10,8 +10,26 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { featurePath, useWorkspace } from '../components/AppLayout'
 import { SourceCard } from '../components/SourceCard'
 import type { NoteRevision, NoteSourceRef } from '../types'
+import { notebookPath } from '../features/notebook/navigation'
 
 export function NotesPage() {
+  const { courseId = '', noteId } = useParams()
+  const navigate = useNavigate()
+  const [message, setMessage] = useState('正在定位原笔记…')
+  useEffect(() => {
+    let active = true
+    if (!noteId) return
+    void api.getNote(noteId).then((note) => {
+      if (!active) return
+      if (note.course_id !== courseId) { setMessage('这条笔记属于其他课程。'); return }
+      navigate(notebookPath(courseId, note), { replace: true })
+    }).catch((cause: unknown) => { if (active) setMessage(cause instanceof Error ? cause.message : '笔记读取失败') })
+    return () => { active = false }
+  }, [courseId, noteId, navigate])
+  return <p role="status">{message}</p>
+}
+
+export function NoteSectionReader({ noteId }: { noteId: string }) {
   const {
     course,
     courseId,
@@ -34,7 +52,7 @@ export function NotesPage() {
     setSelectedPageNumber,
   } = useWorkspace()
   const navigate = useNavigate()
-  const { courseId: routeCourseId = '', noteId } = useParams()
+  const { courseId: routeCourseId = '' } = useParams()
   const [sources, setSources] = useState<NoteSourceRef[]>([])
   const [revisions, setRevisions] = useState<NoteRevision[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
@@ -55,6 +73,7 @@ export function NotesPage() {
     setSources([])
     setRevisions([])
     setWebSources([])
+    setSuggestions([])
     setDetailError(undefined)
     if (!noteId || !selectedNote || selectedNote.id !== noteId) return
     let active = true
@@ -75,13 +94,15 @@ export function NotesPage() {
   }, [noteId, selectedNote?.id, selectedNote?.revision_number])
 
   async function reviewSuggestion(suggestionId: string, decision: 'confirm' | 'reject') {
-    if (!selectedNote) return
+    if (!selectedNote || noteDirty || noteSaving) return
+    try {
     const updated = await api.reviewSuggestion(selectedNote.id, suggestionId, decision)
     setSuggestions((items) => items.map((item) => item.id === suggestionId ? { ...item, status: decision === 'confirm' ? 'accepted' : 'rejected' } : item))
     if (decision === 'confirm') {
       setSelectedNoteId(updated.id)
       await reloadNote()
     }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : '建议处理失败') }
   }
 
   function openSource(source: NoteSourceRef) {
@@ -122,7 +143,7 @@ export function NotesPage() {
         </div>
       </header>
 
-      {courseContentLoading || (notes.length > 0 && !selectedForRoute) ? <div className="page-loading" role="status">正在读取笔记…</div> : !selectedForRoute ? (
+      {courseContentLoading ? <div className="page-loading" role="status">正在读取笔记…</div> : !selectedForRoute ? (
         <EmptyState icon="▤" title="没有找到这条笔记" description="它可能已被移除，或链接属于其他课程。" action={<Link className="secondary-button link-button" to="/notes">返回笔记书架</Link>} />
       ) : (
         <section className="note-reader-workspace">

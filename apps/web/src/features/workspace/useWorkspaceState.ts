@@ -4,6 +4,7 @@ import { matchPath, useLocation } from 'react-router-dom'
 import { api } from '../../api'
 import { useAssistantState } from '../assistant/useAssistantState'
 import { useNoteEditor } from '../notes/useNoteEditor'
+import { mergeNotebookNotes } from '../notebook/navigation'
 import type { Course, Job, KnowledgeGraph, Material, Note, Page } from '../../types'
 
 const emptyGraph: KnowledgeGraph = { nodes: [], edges: [] }
@@ -23,6 +24,9 @@ export function useWorkspaceState() {
   const [pages, setPages] = useState<Page[]>([])
   const [selectedPageNumber, setSelectedPageNumber] = useState<number>()
   const [notes, setNotes] = useState<Note[]>([])
+  const upsertNotes = useCallback((incoming: Note[]) => {
+    setNotes((current) => mergeNotebookNotes(current, incoming))
+  }, [])
   const [selectedNoteId, setSelectedNoteId] = useState<string>()
   const [graph, setGraph] = useState<KnowledgeGraph>(emptyGraph)
   const [job, setJob] = useState<Job>()
@@ -79,6 +83,12 @@ export function useWorkspaceState() {
   useEffect(() => { void refreshCourses() }, [refreshCourses])
 
   useEffect(() => {
+    if (courseId && !location.pathname.endsWith('/notebook')) {
+      void refreshNotes(courseId).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : '笔记读取失败'))
+    }
+  }, [courseId, location.pathname, refreshNotes])
+
+  useEffect(() => {
     let active = true
     setMaterials([])
     setPages([])
@@ -94,7 +104,7 @@ export function useWorkspaceState() {
 
     void Promise.all([
       api.listMaterials(courseId),
-      api.listNotes(courseId),
+      location.pathname.endsWith('/notebook') ? Promise.resolve([] as Note[]) : api.listNotes(courseId),
       api.getKnowledgeGraph(courseId),
     ]).then(([nextMaterials, nextNotes, nextGraph]) => {
       if (!active) return
@@ -222,6 +232,7 @@ export function useWorkspaceState() {
     selectedPageNumber,
     setSelectedPageNumber,
     notes,
+    upsertNotes,
     selectedNote,
     setSelectedNoteId,
     noteDraft,
