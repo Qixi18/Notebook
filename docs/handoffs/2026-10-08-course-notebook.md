@@ -23,7 +23,7 @@
 
 最终代码检查：后端 `uv run pytest -q` 为 115 passed / 1 skipped / 1 upstream deprecation warning，`uv run ruff check app tests` 通过；Web `npm test` 为 4 导航 + 8 React 回归通过，`npm run build` 通过；Git 空白检查与提交钩子通过。跳过的是缺少真实 PPTX 样例的测试。新增 Vitest、Testing Library、jsdom 仅为开发依赖。
 
-合并目标 main；本地合并和最终分支状态见 Git 提交记录及执行记录。未推送 GitHub。
+功能与修复提交 276062b、703f52d、1972aa3 已快进合并本地 main；合并后的全套后端/前端检查再次通过。交接完成记录也在任务分支补充后合并，最终提交见 Git 记录。未推送 GitHub。
 
 ## 范围与剩余
 

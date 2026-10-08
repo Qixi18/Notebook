@@ -88,7 +88,7 @@
 - [x] Run entire backend suite/Ruff, frontend tests/build and relevant isolated backup/migration flows; check each exit status.
 - [x] Record synthetic/browser evidence separately from unavailable real-course/AI acceptance; update scope and API docs accurately.
 - [x] Independent whole-branch reviewer compares spec, plan, tests and changed code; reproduce and fix material findings with RED→GREEN tests.
-- [ ] Commit verified changes; fast-forward merge to main only if feature and baseline checks pass; verify resulting Git state. No force push or unrelated staging.
+- [x] Commit verified changes; fast-forward merge to main only if feature and baseline checks pass; verify resulting Git state. No force push or unrelated staging. Code merge 1972aa3 passed backend/Web checks on main; handoff completion recorded on the task branch.
 
 ## Pre-flight/self-review
 
